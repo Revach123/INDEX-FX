@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>INDEX-FX – מודל דמו</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mut:#5b6573;--line:#dfe3e8;--acc:#0b5fff;--pos:#0a7d3c;--neg:#b42318}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1318;--card:#171c23;--ink:#e8ecf1;--mut:#9aa6b5;--line:#2a323d;--acc:#6ea2ff;--pos:#47c27a;--neg:#ff7a70}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:8px 0 2px}p.sub{margin:0 0 16px;color:var(--mut)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+label{display:block;font-size:13px;color:var(--mut);margin-bottom:3px}
+input,select{width:100%;padding:8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink);font-size:15px}
+h2{font-size:15px;margin:0 0 8px}
+.big{font-size:28px;font-weight:650}.pos{color:var(--pos)}.neg{color:var(--neg)}
+table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:start}
+td.n,th.n{text-align:end;font-variant-numeric:tabular-nums}
+.note{font-size:12.5px;color:var(--mut)}
+</style>
+</head>
+<body><main>
+<h1>INDEX-FX – מודל דמו</h1>
+<p class="sub">הזן שינוי במדדים ובריבית ← כמה מט"ח המסלולים של הגופים המוסדיים צריכים לקנות/למכור כדי לחזור למדיניות, וההשפעה המשוערת על שער הדולר.</p>
+
+<div class="card"><h2>קלט</h2>
+<div class="grid">
+<div><label>מדד ארה"ב (S&P 500), שינוי %</label><input id="r_us" type="number" step="0.1" value="1"></div>
+<div><label>שאר העולם (אירופה, יפן, מתעוררים), שינוי %</label><input id="r_row" type="number" step="0.1" value="0"></div>
+<div><label>ת"א 125, שינוי %</label><input id="r_il" type="number" step="0.1" value="0"></div>
+<div><label>שער דולר-שקל, שינוי % (השפעת ייסוף/פיחות ישיר)</label><input id="e" type="number" step="0.1" value="0"></div>
+<div><label>שינוי ריבית בנק ישראל (נק' אחוז)</label><input id="boi" type="number" step="0.25" value="0"></div>
+<div><label>העברה לתשואות אג"ח שקלי (0–1)</label><input id="pass" type="number" step="0.1" value="0.5" min="0" max="1"></div>
+<div><label>שינוי תשואות אג"ח במטבע חוץ (נק' אחוז)</label><input id="dyfx" type="number" step="0.1" value="0"></div>
+<div><label>מצב פעולה</label><select id="mode"><option value="continuous">רציף – מתאימים כל שינוי</option><option value="band">טווח – רק מי שיצא מהטווח</option></select></div>
+<div><label>שיעור התאמה באופק (0–1)</label><input id="lam" type="number" step="0.1" value="1" min="0" max="1"></div>
+<div><label>מקדם השפעה (% שינוי שער למיליארד $)</label><input id="beta" type="number" step="0.01" value="__BETA__"></div>
+<div><label>שער דולר-שקל ($→₪)</label><input id="spot" type="number" step="0.01" value="3.19"></div>
+<div><label>מח"מ אג"ח שקלי / חוץ (שנים)</label><div style="display:flex;gap:6px"><input id="dil" type="number" value="5"><input id="dfx" type="number" value="6"></div></div>
+</div></div>
+
+<div class="card"><h2>תוצאה</h2>
+<div class="grid">
+<div><label>זרם מט"ח נטו (מיליון $; חיובי = קנייה)</label><div class="big" id="o_tot">–</div></div>
+<div><label>השפעה משוערת על שער הדולר</label><div class="big" id="o_fx">–</div></div>
+<div><label>מסלולים שפועלים</label><div class="big" id="o_n">–</div></div>
+</div>
+<p class="note">הערוצים: "החזקה ישירה" = מחזיק מניות/קרנות במט"ח (עלייה ← מוכר דולר לחזור ליעד). "נגזר" = מחזיק מדד דרך החלף/חוזה (עלייה ← קונה דולר לשמור על חשיפה). ערוצים אלו מוצגים בנפרד.</p>
+<table><thead><tr><th>פירוט</th><th class="n">זרם (מיליון $)</th></tr></thead><tbody id="ch"></tbody></table></div>
+
+<div class="card"><h2>לפי סוג מוצר</h2><table><thead><tr><th>סוג</th><th class="n">נכסים (מיליארד ₪)</th><th class="n">זרם (מיליון $)</th></tr></thead><tbody id="bysys"></tbody></table></div>
+<div class="card"><h2>המסלולים עם הזרם הגדול ביותר</h2><table><thead><tr><th>מסלול</th><th>סוג</th><th class="n">נכסים (מיליון ₪)</th><th class="n">חשיפת מט"ח לפני→אחרי</th><th class="n">זרם (מיליון $)</th></tr></thead><tbody id="top"></tbody></table></div>
+
+<div class="card note"><b>הנחות ומגבלות.</b> הנתונים: דוחות רבעוניים אחרונים (בעיקר 30.6.2026) והמדיניות המוצהרת לכל מסלול. נגזרי מניות מוערכים כשארית מהחשיפה הרשמית למניות (הערכת גג עד לחישוב נוציונל מלא).
+יעד המט"ח הוא מהמדיניות; מסלול ללא מדיניות מוצהרת – יעד = החשיפה הנוכחית. מקדם ההשפעה נאמד מרגרסיה על 2022–2026 (US+שאר העולם, פיגור יום): מובהק אך הסבר חלקי בלבד לתנועת השער. השפעת ת"א 125 אינה נתמכת בנתוני העבר (משקיעים זרים). אין זו המלצת השקעה.</div>
+</main>
+<script>
+const D=__DATA__;
+const C=Object.fromEntries(D.cols.map((c,i)=>[c,i]));
+function run(inp,zeroDv){
+  const res=[];const lam=inp.lam;
+  const rbil=-inp.dil*inp.dyil/100, rbfx=-inp.dfx*inp.dyfx/100;
+  for(const r of D.rows){
+    const g=c=>r[C[c]]; const dv=zeroDv?0:1;
+    const eqfx_us=g('eqfx_us_w'),eqfx_row=g('eqfx_row_w'),eq_us=g('eq_us_w'),eq_row=g('eq_row_w'),eq_il=g('eq_il_w');
+    const dv_us=g('dv_us_w')*dv,dv_row=g('dv_row_w')*dv,dv_il=g('dv_il_w')*dv;
+    const bond_il=g('bond_il_w'),bond_fx=g('bond_fx_w'),fx_spot=g('fx_spot_w'),fx_fwd=g('fx_fwd_w');
+    const T=g('T'),lo=g('lo'),hi=g('hi'),fx0=g('fx0'),e=inp.e;
+    const rest=fx_spot-eqfx_us-eqfx_row-bond_fx;
+    const fxs=(eqfx_us*(1+inp.rus)+eqfx_row*(1+inp.rrow))*(1+e)+bond_fx*(1+rbfx)*(1+e)+rest*(1+e);
+    const fxf=fx_fwd*(1+e);
+    const gain=eqfx_us*((1+inp.rus)*(1+e)-1)+eqfx_row*((1+inp.rrow)*(1+e)-1)+(eq_us-eqfx_us)*inp.rus+(eq_row-eqfx_row)*inp.rrow+eq_il*inp.ril
+      +dv_us*inp.rus+dv_row*inp.rrow+dv_il*inp.ril+bond_il*rbil+bond_fx*((1+rbfx)*(1+e)-1)+rest*e+fx_fwd*e;
+    const A=1+gain, fxn=(fxs+fxf)/A, fxm0=fx_spot+fx_fwd;
+    const fxa=fxn+(fx0-fxm0)/A;
+    const gapN=T*A-fxa*A, gapO=T-fx0, incr=gapN-gapO;
+    let need;
+    if(inp.mode==='band'){const inOld=fx0>=lo&&fx0<=hi, outNew=fxa<lo||fxa>hi; need=(outNew&&inOld)?gapN:(outNew&&!inOld?incr:0);}
+    else need=incr;
+    const flow=lam*need*r[C.total_k];
+    res.push({flow:flow*1000/inp.spot/1e6,fx0,fxa,name:r[0],sys:r[1],tot:r[2]});
+  }
+  return res;
+}
+const $=id=>document.getElementById(id);
+const fmt=(x,d=0)=>(x>=0?'+':'')+x.toLocaleString('he-IL',{maximumFractionDigits:d,minimumFractionDigits:d});
+function inputs(){const v=id=>parseFloat($(id).value)||0;
+  return {rus:v('r_us')/100,rrow:v('r_row')/100,ril:v('r_il')/100,e:v('e')/100,dyil:v('boi')*v('pass'),dyfx:v('dyfx'),
+    mode:$('mode').value,lam:v('lam'),spot:v('spot')||3.19,dil:v('dil'),dfx:v('dfx'),beta:v('beta')};}
+function render(){
+  const inp=inputs(); const all=run(inp,false), dir=run(inp,true);
+  const tot=all.reduce((s,x)=>s+x.flow,0), dirT=dir.reduce((s,x)=>s+x.flow,0);
+  $('o_tot').textContent=fmt(tot); $('o_tot').className='big '+(tot>=0?'pos':'neg');
+  const imp=inp.beta*tot/1000; $('o_fx').textContent=fmt(imp,2)+'%'; $('o_fx').className='big '+(imp>=0?'pos':'neg');
+  $('o_n').textContent=all.filter(x=>Math.abs(x.flow)>0.5).length;
+  $('ch').innerHTML=`<tr><td>החזקה ישירה (מט"ח)</td><td class="n">${fmt(dirT)}</td></tr><tr><td>נגזר (החלף/חוזה)</td><td class="n">${fmt(tot-dirT)}</td></tr><tr><td><b>סה"כ</b></td><td class="n"><b>${fmt(tot)}</b></td></tr>`;
+  const by={};all.forEach(x=>{by[x.sys]=by[x.sys]||{a:0,f:0};by[x.sys].a+=x.tot;by[x.sys].f+=x.flow;});
+  $('bysys').innerHTML=Object.entries(by).map(([k,v])=>`<tr><td>${k}</td><td class="n">${(v.a/1e6).toLocaleString('he-IL',{maximumFractionDigits:0})}</td><td class="n">${fmt(v.f)}</td></tr>`).join('');
+  $('top').innerHTML=[...all].sort((a,b)=>Math.abs(b.flow)-Math.abs(a.flow)).slice(0,10).map(x=>`<tr><td>${x.name}</td><td>${x.sys}</td><td class="n">${(x.tot/1000).toLocaleString('he-IL',{maximumFractionDigits:0})}</td><td class="n">${(x.fx0*100).toFixed(1)}% → ${(x.fxa*100).toFixed(1)}%</td><td class="n">${fmt(x.flow,1)}</td></tr>`).join('');
+}
+document.querySelectorAll('input,select').forEach(el=>el.addEventListener('input',render));
+render();
+if(typeof module!=='undefined')module.exports={run,D};
+</script>
+</body></html>
