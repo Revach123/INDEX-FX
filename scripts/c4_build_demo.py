@@ -38,12 +38,13 @@ for key, s in (("general", t[t.general]), ("all", t)):
     }
 f = pd.read_csv("data/funds/funds.csv", dtype={"fund": str})
 fe = f[f.primary.eq("מניות בחו\"ל") & f.mimic & f.aum_m.notna()]
-ha = pd.read_csv("data/funds/etf_hedge_all.csv")
-k20 = ha[ha["חלון (ימים)"] == 20].set_index("קבוצה")
-funds = {"unhedged_bn": float(fe[~fe.hedged].aum_m.sum() / 1e3), "hedged_bn": float(fe[fe.hedged].aum_m.sum() / 1e3),
-         "k_unh": float(k20.loc["לא מגודרת 4D", "κ (קנייה מכל 1% עלייה)"]), "k_unh_se": float(k20.loc["לא מגודרת 4D", "se"]),
-         "k_hed": float(k20.loc["מגודרת 4A", "κ (קנייה מכל 1% עלייה)"]), "k_hed_se": float(k20.loc["מגודרת 4A", "se"]),
-         "n_unh": int(k20.loc["לא מגודרת 4D", "קרנות"]), "n_hed": int(k20.loc["מגודרת 4A", "קרנות"])}
+# κ חודשי על כל הקרנות המחקות על חו"ל (סל + מחקות פתוחות), מחוזי האקדמה בפועל בדוח החודשי המלא (b7)
+fk = pd.read_csv("data/funds/forwards_monthly_kappa.csv")
+fk = fk[fk["סוג"] == "הכל"].set_index("גידור")
+funds = {"unhedged_bn": float(fk.loc["לא מגודרת", "שווי אחרון (מיליארד)"]), "hedged_bn": float(fk.loc["מגודרת", "שווי אחרון (מיליארד)"]),
+         "k_unh": float(fk.loc["לא מגודרת", "κ (קנייה מכל 1% עלייה)"]), "k_unh_se": float(fk.loc["לא מגודרת", "se"]),
+         "k_hed": float(fk.loc["מגודרת", "κ (קנייה מכל 1% עלייה)"]), "k_hed_se": float(fk.loc["מגודרת", "se"]),
+         "n_unh": int(fk.loc["לא מגודרת", "קרנות"]), "n_hed": int(fk.loc["מגודרת", "קרנות"])}
 data = {"specs": specs, "groups": groups, "funds": funds}
 html = Path("demo/template.html").read_text(encoding="utf-8").replace("__DATA__", json.dumps(data, ensure_ascii=False))
 Path("demo/index.html").write_text(html, encoding="utf-8")
