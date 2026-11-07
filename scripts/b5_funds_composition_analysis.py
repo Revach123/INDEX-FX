@@ -90,7 +90,9 @@ def main(revach: Path):
 
     # ריבית העוגן בהחלפי המניות (שם הנכס, נספח א') - שקלית או דולרית?
     sw = h[h.code == 45].copy()
-    sw["notional"] = num(sw["שווי במטבע מסחר"]) * num(sw["שער המטבע"])
+    # היקף העסקה = "%חשיפה" הרשמי × שווי הקרן. (נבדק: "שווי במטבע מסחר" בפועל הוא הרווח הצבור בדולר, לא שווי העסקה;
+    #  כמות × מחיר ה-Reset × שער נותן את אותו סדר גודל כמו %חשיפה, בהפרש תנועת המדד מאז ה-Reset)
+    sw["notional"] = sw.pct / 100 * sw.fund.map(nav)
     sw["anchor"] = [(parse_otc_name(n) or {}).get("anchor_rate", "לא בפורמט") for n in sw["שם נכס"]]
     a = sw.groupby("anchor").agg(rows=("anchor", "size"), notional_bn=("notional", lambda s: s.sum() / 1e9)).sort_values("notional_bn", ascending=False)
     a.to_csv("data/funds/swap_anchor_rates.csv")
