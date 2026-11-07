@@ -1,0 +1,52 @@
+name: funds-composition
+# הרכב נכסים מלא לכל קרן נאמנות/סל מהדוח החודשי ב-Maya (scripts/b4_fetch_funds_composition.py).
+# חודשי (הדוחות מוגשים עד ~15 בחודש), ידני עם חלון לבחירה, ובדיקה בדחיפה לענף הפיתוח.
+on:
+  schedule:
+    - cron: "17 3 20 * *"
+  workflow_dispatch:
+    inputs:
+      months:
+        description: "חלון דוחות לאחור (חודשים)"
+        required: true
+        default: "2"
+      max_reports:
+        description: "הגבלה לבדיקה (0 = הכל)"
+        required: true
+        default: "0"
+  push:
+    branches: [claude/wizardly-ritchie-k4ew65]
+    paths:
+      - scripts/b4_fetch_funds_composition.py
+      - .github/workflows/funds-composition.yml
+permissions:
+  contents: write
+concurrency:
+  group: funds-composition
+  cancel-in-progress: false
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pandas requests
+      - name: Fetch
+        run: |
+          MONTHS="${{ inputs.months || '2' }}"
+          MAX="${{ inputs.max_reports || '0' }}"
+          # בדיקה בדחיפה: דוחות מעטים בלבד
+          [ "${{ github.event_name }}" = "push" ] && MAX=5
+          python -u scripts/b4_fetch_funds_composition.py --months "$MONTHS" --max-reports "$MAX"
+      - name: Commit
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/funds_composition || true
+          git diff --staged --quiet && exit 0
+          git commit -m "auto: funds composition [skip ci]"
+          for i in 1 2 3 4 5; do git pull --rebase -q origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0; sleep 3; done
+          exit 1
