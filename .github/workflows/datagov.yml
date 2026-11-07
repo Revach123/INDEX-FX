@@ -4,11 +4,6 @@ on:
   schedule:
     - cron: "41 4 25 * *"
   workflow_dispatch:
-  push:
-    branches: [claude/wizardly-ritchie-k4ew65]
-    paths:
-      - scripts/b6_fetch_datagov.py
-      - .github/workflows/datagov.yml
 permissions:
   contents: write
 concurrency:
@@ -24,16 +19,28 @@ jobs:
         with: { python-version: "3.12" }
       - run: pip install pandas requests
       - run: python -u scripts/b6_fetch_datagov.py --from 202201
+      - name: Backup artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: datagov-${{ github.run_id }}
+          path: data/datagov
+          retention-days: 14
       - name: Commit
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/datagov
-          git diff --staged --quiet && exit 0
-          git commit -m "auto: datagov monthly [skip ci]"
+          # בלי rebase על קבצי נתונים: מעתיקים את התיקייה החדשה, מתיישרים לראש הענף, מחזירים ושומרים
+          rm -rf /tmp/newdata && cp -r data/datagov /tmp/newdata
           for i in 1 2 3 4 5; do
-            git pull --rebase -X theirs -q origin "${GITHUB_REF_NAME}" || { git rebase --abort 2>/dev/null; sleep 3; continue; }
+            git fetch -q origin "${GITHUB_REF_NAME}"
+            git reset -q --hard FETCH_HEAD
+            rm -rf data/datagov && mkdir -p "$(dirname data/datagov)" && cp -r /tmp/newdata data/datagov
+            git add -A data/datagov
+            git diff --staged --quiet && exit 0
+            git commit -q -m "auto: datagov monthly [skip ci]"
             git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
-            sleep 3
+            sleep 5
           done
           exit 1

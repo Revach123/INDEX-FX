@@ -14,11 +14,6 @@ on:
         description: "הגבלה לבדיקה (0 = הכל)"
         required: true
         default: "0"
-  push:
-    branches: [claude/wizardly-ritchie-k4ew65]
-    paths:
-      - scripts/b4_fetch_funds_composition.py
-      - .github/workflows/funds-composition.yml
 permissions:
   contents: write
 concurrency:
@@ -37,21 +32,29 @@ jobs:
         run: |
           MONTHS="${{ inputs.months || '2' }}"
           MAX="${{ inputs.max_reports || '0' }}"
-          # בדיקה בדחיפה: דוחות מעטים בלבד
-          [ "${{ github.event_name }}" = "push" ] && MAX=5
           python -u scripts/b4_fetch_funds_composition.py --months "$MONTHS" --max-reports "$MAX"
+      - name: Backup artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: funds_composition-${{ github.run_id }}
+          path: data/funds_composition
+          retention-days: 14
       - name: Commit
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/funds_composition || true
-          git diff --staged --quiet && exit 0
-          git commit -m "auto: funds composition [skip ci]"
-          # קבצים שנוצרו בריצה הזו גוברים על גרסה שנדחפה בינתיים (למשל ריצת בדיקה מקבילה) - אותם דוחות, משיכה עדכנית יותר
+          # בלי rebase על קבצי נתונים: מעתיקים את התיקייה החדשה, מתיישרים לראש הענף, מחזירים ושומרים
+          rm -rf /tmp/newdata && cp -r data/funds_composition /tmp/newdata
           for i in 1 2 3 4 5; do
-            git pull --rebase -X theirs -q origin "${GITHUB_REF_NAME}" || { git rebase --abort 2>/dev/null; sleep 3; continue; }
+            git fetch -q origin "${GITHUB_REF_NAME}"
+            git reset -q --hard FETCH_HEAD
+            rm -rf data/funds_composition && mkdir -p "$(dirname data/funds_composition)" && cp -r /tmp/newdata data/funds_composition
+            git add -A data/funds_composition
+            git diff --staged --quiet && exit 0
+            git commit -q -m "auto: funds composition [skip ci]"
             git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
-            sleep 3
+            sleep 5
           done
           exit 1
