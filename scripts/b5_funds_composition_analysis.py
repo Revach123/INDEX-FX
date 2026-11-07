@@ -31,7 +31,8 @@ def num(s):
 
 
 def main(revach: Path):
-    d = pd.read_csv("data/funds_composition/long.csv.gz", dtype=str)
+    files = sorted(Path("data/funds_composition/long").glob("*.csv.gz"))
+    d = pd.concat([pd.read_csv(f, dtype=str) for f in files], ignore_index=True)
     d["code"] = num(d["סוג נכס"])
     d["fund"] = num(d["מספר קרן"]).astype("Int64").astype(str)
     d["val"] = num(d["שווי בשקלים"])

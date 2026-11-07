@@ -10,7 +10,7 @@ Revach (exposure.py, לדף funds) שומר ממנו 6 קודים בלבד; כא
 פלט (data/funds_composition/):
   raw/<YYYYMM>/<report_id>.csv.gz   הקובץ כפי שהתקבל (כל העמודות)
   manifest.csv                      report_id, company, report_month, rows, funds, fetched_at, status
-  long.csv.gz                       כל השורות מכל הדוחות, עמודות מנורמלות + report_id
+  long/<YYYYMM>.csv.gz              כל השורות של כל הדוחות באותו חודש + report_id
 הרצה: python scripts/b4_fetch_funds_composition.py [--months 2] [--max-reports N]
 הקריאות מזדהות בכנות (User-Agent של הפרויקט); כשל נרשם ב-manifest ולא מפיל את שאר הדוחות.
 """
@@ -158,19 +158,23 @@ def main():
         time.sleep(0.3)
     man = pd.concat([man[~man.report_id.astype(str).isin({str(x['report_id']) for x in new_rows})], pd.DataFrame(new_rows)])
     man.to_csv(man_p, index=False)
-    # טבלה ארוכה מכל הקבצים שנשמרו
-    parts = []
-    for p in sorted((OUT / "raw").glob("*/*.csv.gz")):
-        df = parse(gzip.decompress(p.read_bytes()))
-        if df.empty:
-            continue
-        df.insert(0, "report_id", p.stem.replace(".csv", ""))
-        df.insert(1, "report_month", p.parent.name)
-        parts.append(df)
-    if parts:
-        long = pd.concat(parts, ignore_index=True)
-        long.to_csv(OUT / "long.csv.gz", index=False, compression="gzip")
-        print(f"[b4] long.csv.gz: {len(long):,} שורות, {len(parts)} דוחות", flush=True)
+    # טבלה ארוכה לכל חודש (קובץ אחד לחודש - מתחת למגבלת 100MB של GitHub)
+    (OUT / "long").mkdir(exist_ok=True)
+    for mdir in sorted(p for p in (OUT / "raw").iterdir() if p.is_dir()):
+        parts = []
+        for p in sorted(mdir.glob("*.csv.gz")):
+            df = parse(gzip.decompress(p.read_bytes()))
+            if df.empty:
+                continue
+            df.insert(0, "report_id", p.stem.replace(".csv", ""))
+            df.insert(1, "report_month", mdir.name)
+            parts.append(df)
+        if parts:
+            pd.concat(parts, ignore_index=True).to_csv(OUT / "long" / f"{mdir.name}.csv.gz", index=False, compression="gzip")
+            print(f"[b4] long/{mdir.name}.csv.gz: {sum(len(x) for x in parts):,} שורות, {len(parts)} דוחות", flush=True)
+    old_long = OUT / "long.csv.gz"
+    if old_long.exists():
+        old_long.unlink()
     ok = sum(1 for x in new_rows if x["status"] == "ok")
     print(f"[b4] נמשכו {ok}/{len(new_rows)} דוחות חדשים", flush=True)
     if new_rows and ok == 0:
