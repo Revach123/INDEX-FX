@@ -3,105 +3,102 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>INDEX-FX – מודל דמו</title>
+<title>INDEX-FX – מדדים ושער הדולר</title>
 <style>
-:root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mut:#5b6573;--line:#dfe3e8;--acc:#0b5fff;--pos:#0a7d3c;--neg:#b42318}
-@media (prefers-color-scheme:dark){:root{--bg:#0f1318;--card:#171c23;--ink:#e8ecf1;--mut:#9aa6b5;--line:#2a323d;--acc:#6ea2ff;--pos:#47c27a;--neg:#ff7a70}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mut:#5b6573;--line:#dfe3e8;--acc:#0b5fff;--pos:#0a7d3c;--neg:#b42318;--ok:#0a7d3c;--bad:#b42318;--mid:#9a6700}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1318;--card:#171c23;--ink:#e8ecf1;--mut:#9aa6b5;--line:#2a323d;--acc:#6ea2ff;--pos:#47c27a;--neg:#ff7a70;--ok:#47c27a;--bad:#ff7a70;--mid:#e0b341}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
 main{max-width:1000px;margin:0 auto;padding:16px}
 h1{font-size:22px;margin:8px 0 2px}p.sub{margin:0 0 16px;color:var(--mut)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px}
 label{display:block;font-size:13px;color:var(--mut);margin-bottom:3px}
 input,select{width:100%;padding:8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink);font-size:15px}
-h2{font-size:15px;margin:0 0 8px}
-.big{font-size:28px;font-weight:650}.pos{color:var(--pos)}.neg{color:var(--neg)}
-table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:start}
-td.n,th.n{text-align:end;font-variant-numeric:tabular-nums}
+h2{font-size:16px;margin:0 0 8px}
+.big{font-size:26px;font-weight:650}.pos{color:var(--pos)}.neg{color:var(--neg)}
+table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:start;vertical-align:top}
+td.n,th.n{text-align:end;font-variant-numeric:tabular-nums;white-space:nowrap}
 .note{font-size:12.5px;color:var(--mut)}
+.tag{display:inline-block;padding:1px 7px;border-radius:9px;font-size:12px;font-weight:600}
+.t-ok{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.t-bad{background:color-mix(in srgb,var(--bad) 15%,transparent);color:var(--bad)}
+.t-mid{background:color-mix(in srgb,var(--mid) 18%,transparent);color:var(--mid)}
 </style>
 </head>
 <body><main>
-<h1>INDEX-FX – מודל דמו</h1>
-<p class="sub">הזן שינוי במדדים ובריבית ← כמה מט"ח המסלולים של הגופים המוסדיים צריכים לקנות/למכור כדי לחזור למדיניות, וההשפעה המשוערת על שער הדולר.</p>
+<h1>INDEX-FX – האם עליית מדדים בחו"ל מורידה את הדולר?</h1>
+<p class="sub">חישוב לפי מה שהגופים המוסדיים עשו בפועל (קנייה/מכירה של מט"ח מתוך הדוחות), לא לפי הנחה על איזון.</p>
 
 <div class="card"><h2>קלט</h2>
 <div class="grid">
-<div><label>מדד ארה"ב (S&P 500), שינוי %</label><input id="r_us" type="number" step="0.1" value="1"></div>
-<div><label>שאר העולם (אירופה, יפן, מתעוררים), שינוי %</label><input id="r_row" type="number" step="0.1" value="0"></div>
-<div><label>ת"א 125, שינוי %</label><input id="r_il" type="number" step="0.1" value="0"></div>
-<div><label>שער דולר-שקל, שינוי % (השפעת ייסוף/פיחות ישיר)</label><input id="e" type="number" step="0.1" value="0"></div>
-<div><label>שינוי ריבית בנק ישראל (נק' אחוז)</label><input id="boi" type="number" step="0.25" value="0"></div>
-<div><label>העברה לתשואות אג"ח שקלי (0–1)</label><input id="pass" type="number" step="0.1" value="0.5" min="0" max="1"></div>
-<div><label>שינוי תשואות אג"ח במטבע חוץ (נק' אחוז)</label><input id="dyfx" type="number" step="0.1" value="0"></div>
-<div><label>מצב פעולה</label><select id="mode"><option value="continuous">רציף – מתאימים כל שינוי</option><option value="band">טווח – רק מי שיצא מהטווח</option></select></div>
-<div><label>שיעור התאמה באופק (0–1)</label><input id="lam" type="number" step="0.1" value="1" min="0" max="1"></div>
-<div><label>מקדם השפעה (% שינוי שער למיליארד $)</label><input id="beta" type="number" step="0.01" value="__BETA__"></div>
-<div><label>שער דולר-שקל ($→₪)</label><input id="spot" type="number" step="0.01" value="3.19"></div>
-<div><label>מח"מ אג"ח שקלי / חוץ (שנים)</label><div style="display:flex;gap:6px"><input id="dil" type="number" value="5"><input id="dfx" type="number" value="6"></div></div>
+<div><label>מניות ארה"ב (S&P 500 TR), שינוי %</label><input id="r_us" type="number" step="0.5" value="10"></div>
+<div><label>מניות שאר העולם, שינוי %</label><input id="r_row" type="number" step="0.5" value="10"></div>
+<div><label>ת"א 125, שינוי %</label><input id="r_il" type="number" step="0.5" value="5"></div>
+<div><label>אג"ח שקלי, שינוי %</label><input id="r_b" type="number" step="0.5" value="5"></div>
+<div><label>ריבית דולרית שנתית % (רגל ההחלף)</label><input id="i_usd" type="number" step="0.25" value="4"></div>
+<div><label>אופק (חודשים)</label><input id="h" type="number" step="1" min="1" max="3" value="3"></div>
+<div><label>מסלולים</label><select id="grp"><option value="general">מסלולים כלליים/תלויי גיל</option><option value="all">כל המסלולים</option></select></div>
+<div><label>אמידת התגובה</label><select id="spec"><option value="weighted">משוקלל לפי נכסים</option><option value="unweighted">לא משוקלל</option></select></div>
 </div></div>
 
-<div class="card"><h2>תוצאה</h2>
+<div class="card"><h2>תוצאה (מיליארדי ש"ח; חיובי = קניית דולר)</h2>
 <div class="grid">
-<div><label>זרם מט"ח נטו (מיליון $; חיובי = קנייה)</label><div class="big" id="o_tot">–</div></div>
-<div><label>השפעה משוערת על שער הדולר</label><div class="big" id="o_fx">–</div></div>
-<div><label>מסלולים שפועלים</label><div class="big" id="o_n">–</div></div>
+<div><label>מסלולים – זרם מט"ח</label><div class="big" id="o_tr">–</div><div class="note" id="o_tr_ci"></div></div>
+<div><label>קרנות מחקות לא מגודרות</label><div class="big" id="o_unh">–</div><div class="note" id="o_unh_ci"></div></div>
+<div><label>קרנות מחקות מגודרות</label><div class="big" id="o_hed">–</div><div class="note" id="o_hed_ci"></div></div>
+<div><label>סה"כ</label><div class="big" id="o_tot">–</div><div class="note" id="o_tot_ci"></div></div>
 </div>
-<p class="note">הערוצים: "החזקה ישירה" = מחזיק מניות/קרנות במט"ח (עלייה ← מוכר דולר לחזור ליעד). "נגזר" = מחזיק מדד דרך החלף/חוזה (עלייה ← קונה דולר לשמור על חשיפה). ערוצים אלו מוצגים בנפרד.</p>
-<table><thead><tr><th>פירוט</th><th class="n">זרם (מיליון $)</th></tr></thead><tbody id="ch"></tbody></table></div>
+<table style="margin-top:10px"><thead><tr><th>פירוק המסלולים</th><th class="n">רווח/גידול</th><th class="n">תגובה בפועל (מקדם)</th><th class="n">זרם</th></tr></thead><tbody id="dec"></tbody></table>
+<p class="note">"תגובה בפועל" = כמה מט"ח המסלולים קנו/מכרו ביחס לכל שקל של רווח דולרי או של גידול התיק, נמדד מהדוחות הרבעוניים (2024–2026). מקדם ‎−1 היה אומר שמוכרים את כל הרווח; 0 – לא נוגעים.
+הטווח הוא 95% (שגיאות מקובצות לפי מסלול). קרנות: לפי חוזי האקדמה בפועל בהרכב היומי, תוך כחודש. השפעה על שער הדולר עצמו אינה מוצגת – לא נאמדה מחדש על הזרמים האלה.</p>
+</div>
 
-<div class="card"><h2>לפי סוג מוצר</h2><table><thead><tr><th>סוג</th><th class="n">נכסים (מיליארד ₪)</th><th class="n">זרם (מיליון $)</th></tr></thead><tbody id="bysys"></tbody></table></div>
-<div class="card"><h2>המסלולים עם הזרם הגדול ביותר</h2><table><thead><tr><th>מסלול</th><th>סוג</th><th class="n">נכסים (מיליון ₪)</th><th class="n">חשיפת מט"ח לפני→אחרי</th><th class="n">זרם (מיליון $)</th></tr></thead><tbody id="top"></tbody></table></div>
-
-<div class="card note"><b>הנחות ומגבלות.</b> הנתונים: דוחות רבעוניים אחרונים (בעיקר 30.6.2026) והמדיניות המוצהרת לכל מסלול. נגזרי מניות מוערכים כשארית מהחשיפה הרשמית למניות (הערכת גג עד לחישוב נוציונל מלא).
-יעד המט"ח הוא מהמדיניות; מסלול ללא מדיניות מוצהרת – יעד = החשיפה הנוכחית. מקדם ההשפעה נאמד מרגרסיה על 2022–2026 (US+שאר העולם, פיגור יום): מובהק אך הסבר חלקי בלבד לתנועת השער. השפעת ת"א 125 אינה נתמכת בנתוני העבר (משקיעים זרים). אין זו המלצת השקעה.</div>
+<div class="card"><h2>בדיקת המאמר "סודות הגידור"</h2>
+<table><thead><tr><th>טענה</th><th>מה נמצא בנתונים</th><th>מסקנה</th></tr></thead><tbody>
+<tr><td>עליית המדדים לא גורמת למסלולי הפנסיה למכור דולר באופן אוטומטי</td><td>בזרם בפועל: רווח דולרי פיזי כמעט לא נמכר (מקדם ~0), רווח סינתטי נמכר חלקית (‎−0.13 עד ‎−0.19), וכשהתיק גדל – קונים. אין מכירה מובהקת.</td><td><span class="tag t-ok">נכון</span></td></tr>
+<tr><td>קרנות מחקות כמעט לא מחזיקות מניות פיזית</td><td>פיזי 1.5% (לא מגודרות) / 0.9% (מגודרות); עסקאות החלף 90%–96%</td><td><span class="tag t-ok">נכון</span></td></tr>
+<tr><td>הלא-מגודרות עושות "גידור הפוך" וקונות דולר בכל עלייה</td><td>חוזי אקדמה 94% מהנכסים; קונות כ-0.65 מכל 1% עלייה בתוך חודש</td><td><span class="tag t-ok">נכון</span></td></tr>
+<tr><td>בהחלף חשוף רק ההפרש בין התשואה לריבית הדולרית</td><td>97% מהחלפי המניות בקרנות צמודים ל-SOFR</td><td><span class="tag t-ok">נכון</span></td></tr>
+<tr><td>קרנות אקטיביות – כ-60% פיזי</td><td>69% מהחשיפה למניות במניות ישירות (85% כולל קרנות זרות)</td><td><span class="tag t-ok">נכון בערך</span></td></tr>
+<tr><td>כ-19% מט"ח, כ-30% מניות חו"ל, כ-8% פיזי</td><td>19.1% / 31.2% / 9.1% מניות ישירות – ועוד 8.0% קרנות זרות נקובות במט"ח</td><td><span class="tag t-mid">חלקי</span></td></tr>
+<tr><td>חשיפת המט"ח מגיעה מהחלפים וחוזים על מט"ח</td><td>מנכסים במטבע חוץ (33% מהנכסים); חוזי המט"ח מוכרים דולר (‎−15%) ומורידים את החשיפה</td><td><span class="tag t-bad">לא מדויק</span></td></tr>
+<tr><td>המנגנון ההפוך חזק פי 2 ממכירת הפנסיה</td><td>הלא-מגודרות קונות ~6 מיליארד לכל 10%; תגובת המסלולים קרובה ל-0 עם טווח רחב – אין עדות למכירה, אבל גם לא ליחס "פי 2"</td><td><span class="tag t-mid">לא הוכח</span></td></tr>
+</tbody></table>
+<p class="note">מקורות: דוחות "רשימת נכסים ברמת הנכס הבודד" של כל מסלולי הגמל/פנסיה/ביטוח (2024Q1–2026Q2); הדוח החודשי המלא של כל קרן נאמנות/סל (Maya, לפי מפרט רשות ני"ע); הרכב יומי של קרנות הסל; data.gov.il (חשיפה רשמית חודשית); מדיניות ההשקעה המוצהרת. חשיפת הנגזרים בקוד המאומת של MASLULIM. התאמה מצרפית לחשיפה הרשמית: מתאם 0.8.
+מגבלות: נתון רבעוני למסלולים (9 מעברים); קרנות השקעה פרטיות לפי שינוי יתרה; מזומן כולל הכנסות; חלק מהנגזרים משוערך לפי מדד קרוב. אין זו המלצת השקעה.</p>
+</div>
 </main>
 <script>
 const D=__DATA__;
-const C=Object.fromEntries(D.cols.map((c,i)=>[c,i]));
-function run(inp,zeroDv){
-  const res=[];const lam=inp.lam;
-  const rbil=-inp.dil*inp.dyil/100, rbfx=-inp.dfx*inp.dyfx/100;
-  for(const r of D.rows){
-    const g=c=>r[C[c]]; const dv=zeroDv?0:1;
-    const eqfx_us=g('eqfx_us_w'),eqfx_row=g('eqfx_row_w'),eq_us=g('eq_us_w'),eq_row=g('eq_row_w'),eq_il=g('eq_il_w');
-    const dv_us=g('dv_us_w')*dv,dv_row=g('dv_row_w')*dv,dv_il=g('dv_il_w')*dv;
-    const bond_il=g('bond_il_w'),bond_fx=g('bond_fx_w'),fx_spot=g('fx_spot_w'),fx_fwd=g('fx_fwd_w');
-    const T=g('T'),lo=g('lo'),hi=g('hi'),fx0=g('fx0'),e=inp.e;
-    const rest=fx_spot-eqfx_us-eqfx_row-bond_fx;
-    const fxs=(eqfx_us*(1+inp.rus)+eqfx_row*(1+inp.rrow))*(1+e)+bond_fx*(1+rbfx)*(1+e)+rest*(1+e);
-    const fxf=fx_fwd*(1+e);
-    const gain=eqfx_us*((1+inp.rus)*(1+e)-1)+eqfx_row*((1+inp.rrow)*(1+e)-1)+(eq_us-eqfx_us)*inp.rus+(eq_row-eqfx_row)*inp.rrow+eq_il*inp.ril
-      +dv_us*inp.rus+dv_row*inp.rrow+dv_il*inp.ril+bond_il*rbil+bond_fx*((1+rbfx)*(1+e)-1)+rest*e+fx_fwd*e;
-    const A=1+gain, fxn=(fxs+fxf)/A, fxm0=fx_spot+fx_fwd;
-    const fxa=fxn+(fx0-fxm0)/A;
-    const gapN=T*A-fxa*A, gapO=T-fx0, incr=gapN-gapO;
-    let need;
-    if(inp.mode==='band'){const inOld=fx0>=lo&&fx0<=hi, outNew=fxa<lo||fxa>hi; need=(outNew&&inOld)?gapN:(outNew&&!inOld?incr:0);}
-    else need=incr;
-    const flow=lam*need*r[C.total_k];
-    res.push({flow:flow*1000/inp.spot/1e6,fx0,fxa,name:r[0],sys:r[1],tot:r[2]});
-  }
-  return res;
-}
 const $=id=>document.getElementById(id);
-const fmt=(x,d=0)=>(x>=0?'+':'')+x.toLocaleString('he-IL',{maximumFractionDigits:d,minimumFractionDigits:d});
-function inputs(){const v=id=>parseFloat($(id).value)||0;
-  return {rus:v('r_us')/100,rrow:v('r_row')/100,ril:v('r_il')/100,e:v('e')/100,dyil:v('boi')*v('pass'),dyfx:v('dyfx'),
-    mode:$('mode').value,lam:v('lam'),spot:v('spot')||3.19,dil:v('dil'),dfx:v('dfx'),beta:v('beta')};}
+const fmt=(x,d=1)=>(x>=0?'+':'')+x.toLocaleString('he-IL',{maximumFractionDigits:d,minimumFractionDigits:d});
+function calc(inp){
+  const g=D.groups[inp.grp], s=D.specs[inp.spec];
+  const carry=inp.i*inp.h/12;
+  const Gp=g.phys_us*inp.us+g.phys_row*inp.row;
+  const Gs=g.syn_us*(inp.us-carry)+g.syn_row*(inp.row-carry);
+  const Gg=g.g_fr_us*inp.us+g.g_fr_row*inp.row+g.g_ilf*(0.5*inp.us+0.5*inp.row)+g.g_il*inp.il+g.g_bond*inp.b;
+  const x=[Gp,Gs,Gg], b=s.b, V=s.V;
+  const est=x[0]*b[0]+x[1]*b[1]+x[2]*b[2];
+  let v=0; for(let i=0;i<3;i++)for(let j=0;j<3;j++)v+=x[i]*V[i][j]*x[j];
+  const se=Math.sqrt(Math.max(v,0));
+  const r_fr=(inp.us+inp.row)/2, F=D.funds;
+  const unh=F.k_unh*r_fr*F.unhedged_bn, unh_se=F.k_unh_se*r_fr*F.unhedged_bn;
+  const hed=F.k_hed*r_fr*F.hedged_bn, hed_se=F.k_hed_se*r_fr*F.hedged_bn;
+  return {x,b,est,se,unh,unh_se,hed,hed_se,tot:est+unh+hed,tot_se:Math.sqrt(se*se+unh_se*unh_se+hed_se*hed_se),g};
+}
 function render(){
-  const inp=inputs(); const all=run(inp,false), dir=run(inp,true);
-  const tot=all.reduce((s,x)=>s+x.flow,0), dirT=dir.reduce((s,x)=>s+x.flow,0);
-  $('o_tot').textContent=fmt(tot); $('o_tot').className='big '+(tot>=0?'pos':'neg');
-  const imp=inp.beta*tot/1000; $('o_fx').textContent=fmt(imp,2)+'%'; $('o_fx').className='big '+(imp>=0?'pos':'neg');
-  $('o_n').textContent=all.filter(x=>Math.abs(x.flow)>0.5).length;
-  $('ch').innerHTML=`<tr><td>החזקה ישירה (מט"ח)</td><td class="n">${fmt(dirT)}</td></tr><tr><td>נגזר (החלף/חוזה)</td><td class="n">${fmt(tot-dirT)}</td></tr><tr><td><b>סה"כ</b></td><td class="n"><b>${fmt(tot)}</b></td></tr>`;
-  const by={};all.forEach(x=>{by[x.sys]=by[x.sys]||{a:0,f:0};by[x.sys].a+=x.tot;by[x.sys].f+=x.flow;});
-  $('bysys').innerHTML=Object.entries(by).map(([k,v])=>`<tr><td>${k}</td><td class="n">${(v.a/1e6).toLocaleString('he-IL',{maximumFractionDigits:0})}</td><td class="n">${fmt(v.f)}</td></tr>`).join('');
-  $('top').innerHTML=[...all].sort((a,b)=>Math.abs(b.flow)-Math.abs(a.flow)).slice(0,10).map(x=>`<tr><td>${x.name}</td><td>${x.sys}</td><td class="n">${(x.tot/1000).toLocaleString('he-IL',{maximumFractionDigits:0})}</td><td class="n">${(x.fx0*100).toFixed(1)}% → ${(x.fxa*100).toFixed(1)}%</td><td class="n">${fmt(x.flow,1)}</td></tr>`).join('');
+  const v=id=>parseFloat($(id).value)||0;
+  const inp={us:v('r_us')/100,row:v('r_row')/100,il:v('r_il')/100,b:v('r_b')/100,i:v('i_usd')/100,h:Math.min(3,Math.max(1,v('h'))),grp:$('grp').value,spec:$('spec').value};
+  const r=calc(inp);
+  const set=(id,val,se)=>{$(id).textContent=fmt(val);$(id).className='big '+(val>=0?'pos':'neg');$(id+'_ci').textContent='טווח 95%: '+fmt(val-1.96*se)+' עד '+fmt(val+1.96*se);};
+  set('o_tr',r.est,r.se); set('o_unh',r.unh,r.unh_se); set('o_hed',r.hed,r.hed_se); set('o_tot',r.tot,r.tot_se);
+  const names=['רווח דולרי – מניות פיזיות וקרנות זרות','רווח דולרי – החלפים/חוזים (תשואה פחות ריבית)','גידול התיק × אחוז המט"ח'];
+  $('dec').innerHTML=r.x.map((x,i)=>`<tr><td>${names[i]}</td><td class="n">${fmt(x)}</td><td class="n">${fmt(r.b[i],2)}</td><td class="n">${fmt(x*r.b[i])}</td></tr>`).join('')
+    +`<tr><td colspan="4" class="note">נכסי הקבוצה: ${r.g.assets.toLocaleString('he-IL',{maximumFractionDigits:0})} מיליארד ש"ח; חשיפת מט"ח ממוצעת ${(r.g.fx_avg*100).toFixed(1)}%.</td></tr>`;
 }
 document.querySelectorAll('input,select').forEach(el=>el.addEventListener('input',render));
 render();
-if(typeof module!=='undefined')module.exports={run,D};
+if(typeof module!=='undefined')module.exports={calc,D};
 </script>
 </body></html>
