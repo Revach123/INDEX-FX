@@ -118,7 +118,10 @@ def parse(raw: bytes) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame()
     hdr = [clean(h) for h in rows[0]]
-    df = pd.DataFrame([r + [""] * (len(hdr) - len(r)) for r in rows[1:]], columns=hdr).map(clean)
+    n = max(len(hdr), max((len(r) for r in rows[1:]), default=0))
+    # שורה עם יותר שדות מהכותרת (נמצא: אלטשולר-שחם 08/2026, 29 מול 28) - העמודות העודפות נשמרות כ-extra_N
+    hdr = hdr + [f"extra_{i}" for i in range(len(hdr), n)]
+    df = pd.DataFrame([r + [""] * (n - len(r)) for r in rows[1:]], columns=hdr).map(clean)
     return df
 
 
