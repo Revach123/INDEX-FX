@@ -237,10 +237,26 @@ def explode_fx_forwards(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     פער קטן (עד 50%) נובע מכך ש-נקוב הרגל השקלית נקבע בשער החוזה ולא בשער הספוט - תקין.
     """
     d = df[df.form.isin(["FX_FWD_UNFUNDED", "FX_FWD_FUNDED"])].copy()
+    # בדוחות שלפני 2026 שתי עמודות השער ברגליים נקראות "שער חליפין" (בלי "רגל 1/2") ולא נקלטו כשער רגל.
+    # במקרה כזה: השער שהדוח עצמו משתמש בו לאותו מטבע (שער בנק ישראל ליום הדוח) - חציון "שער חליפין" של שורות
+    # אחרות באותו קובץ ובאותו מטבע. ש"ח = 1.
+    rates = df[df.ccy.astype(str).str.match(r"^[A-Z]{3}$") & num(df.fx_rate).gt(0)].groupby(["file", "ccy"]).fx_rate.apply(
+        lambda s: num(s).median())
+    for n in (1, 2):
+        c = d[f"leg{n}_ccy"].astype(str)
+        own = num(d[f"leg{n}_fx"]) if f"leg{n}_fx" in d else pd.Series(np.nan, index=d.index)
+        fb = pd.Series([1.0 if cc == "ILS" else rates.get((f, cc), np.nan) for f, cc in zip(d.file, c)], index=d.index)
+        r = own.fillna(fb)
+        # יין: חלק מהמדווחים רושמים שער ל-100 יין (מוסכמת בנק ישראל, ~2.4) במקום ליחידה (~0.024) - שער יין אמיתי < 0.5 תמיד
+        r = np.where((c == "JPY") & (r > 0.5), r / 100, r)
+        d[f"leg{n}_fx"] = r
+        d[f"leg{n}_fx_src"] = np.where(own.notna(), "leg", "report_rate")
     v1 = num(d["leg1_nominal"]) * num(d["leg1_fx"])
     v2 = num(d["leg2_nominal"]) * num(d["leg2_fx"])
     d["rel_gap"] = (v1 + v2).abs() / np.maximum(v1.abs(), v2.abs()).replace(0, np.nan)
-    d["consistent"] = d["rel_gap"].fillna(1.0) <= 0.5
+    # עסקה שבה שתי הרגליים באותו סימן - כיוון העסקה (קנייה/מכירה) אינו מדווח; לא מנחשים
+    d["unsigned"] = (np.sign(v1) == np.sign(v2)) & v1.ne(0) & v2.ne(0)
+    d["consistent"] = (d["rel_gap"].fillna(1.0) <= 0.5) & ~d["unsigned"]
     anomalies = d[~d["consistent"]]
     legs = []
     for n in (1, 2):
