@@ -48,5 +48,10 @@ jobs:
           git add data/funds_composition || true
           git diff --staged --quiet && exit 0
           git commit -m "auto: funds composition [skip ci]"
-          for i in 1 2 3 4 5; do git pull --rebase -q origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0; sleep 3; done
+          # קבצים שנוצרו בריצה הזו גוברים על גרסה שנדחפה בינתיים (למשל ריצת בדיקה מקבילה) - אותם דוחות, משיכה עדכנית יותר
+          for i in 1 2 3 4 5; do
+            git pull --rebase -X theirs -q origin "${GITHUB_REF_NAME}" || { git rebase --abort 2>/dev/null; sleep 3; continue; }
+            git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            sleep 3
+          done
           exit 1
