@@ -1,7 +1,7 @@
 """מודל v2 - מבוסס פירוק מדויק לפי צורת השקעה (a7) והתנהגות קרנות שנמדדה (b3).
 
 מסלול (שברים מהנכסים לפני ההלם):
-  U_us, U_row   חשיפה למניות חו"ל שהרווח עליה נצבר בדולר:
+  U_phys_*, U_syn_*  חשיפה למניות חו"ל שהרווח עליה נצבר בדולר (פיזי: כל הקרן + התשואה; סינתטי: רק תשואה פחות ריבית דולרית):
                 מניות ישירות + קרנות זרות (נקובות מט"ח) + החלפים (רגליים בדולר - נבדק: 204+32 מיליארד ש"ח מתוך כ-250)
                 + חוזים עתידיים (מרווח בדולר).
   syn_il_fx     שיעור חשיפת המניות-בחו"ל שבאה דרך קרנות ישראליות (הקרן עצמה מנהלת את המט"ח שלה, לפי fx_pct שלה)
@@ -32,6 +32,8 @@ class P2:
     dur_fx: float = 6.0
     usdils: float = 3.19
     kappa_unhedged: float = 0.67  # b3, חלון 10 ימים
+    usd_rate: float = 0.0         # ריבית דולרית שנתית (שבר) שמשלמים ברגל המימון של ההחלף/החוזה
+    horizon_years: float = 0.0    # משך התקופה; 0 = הלם מיידי (הריבית זניחה)
 
 
 def track_flows(t: pd.DataFrame, r_us=0.0, r_row=0.0, r_il=0.0, e=0.0, dy_il=0.0, dy_fx=0.0, p: P2 = P2()) -> pd.DataFrame:
@@ -39,7 +41,9 @@ def track_flows(t: pd.DataFrame, r_us=0.0, r_row=0.0, r_il=0.0, e=0.0, dy_il=0.0
     E_il, B_il, B_fx, FX0, T, total_k."""
     rb_il, rb_fx = -p.dur_il * dy_il / 100, -p.dur_fx * dy_fx / 100
     phys_gain = t.U_phys_us * r_us + t.U_phys_row * r_row
-    syn_gain = t.U_syn_us * r_us + t.U_syn_row * r_row
+    # החלף/חוזה: הרווח הדולרי = תשואת המדד פחות הריבית הדולרית על הנוציונל (אין חשיפה על הקרן עצמה)
+    carry = p.usd_rate * p.horizon_years
+    syn_gain = t.U_syn_us * (r_us - carry) + t.U_syn_row * (r_row - carry)
     r_fr = np.where((t.U_phys_us + t.U_syn_us + t.U_phys_row + t.U_syn_row) > 0,
                     (t.U_phys_us + t.U_syn_us) * r_us + (t.U_phys_row + t.U_syn_row) * r_row, 0.0)
     r_fr = r_fr / np.maximum(t.U_phys_us + t.U_syn_us + t.U_phys_row + t.U_syn_row, 1e-12)

@@ -6,7 +6,8 @@
   r_fr            תשואת מניות חו"ל בדולר ברבעון (תמהיל ארה"ב/שאר העולם של המסלול)
   e               שינוי USD/ILS (בנק ישראל) ברבעון
   R               תשואת המסלול בפועל ברבעון (MASLULIM/returns/monthly_totals.csv)
-"פסיבי" (בלי שום מסחר במט"ח):  FXp = [FX0 + (U_phys + U_syn)·r_fr]·(1+e) / (1+R)
+"פסיבי" (בלי שום מסחר במט"ח):  FXp = [FX0 + U_phys·r_fr + U_syn·(r_fr − i_usd·τ)]·(1+e) / (1+R)
+  (בהחלף/חוזה הרווח הדולרי הוא תשואת המדד פחות הריבית הדולרית על הנוציונל; ארה"ב לפי S&P 500 Total Return)
 רגרסיה: (FX1 − FX0) = a + β·(FXp − FX0).  β≈0: איזון מלא ליעד; β≈1: לא מאזנים (החשיפה זזה עם השוק).
 גרסה נוספת: רק הפיזי נחשב רווח דולרי (הנחת המאמר) - FXp_article. איזו מהשתיים מסבירה טוב יותר את מה שקרה בפועל.
 """
@@ -25,6 +26,7 @@ from a3_aggregate_validate import track_totals  # noqa: E402
 from d2_article_scenario import is_us  # noqa: E402
 
 KEY = ["legal_id", "track"]
+INDICES = Path("/home/user/revach123/indices")  # שכפול Revach123/INDICES (קריאה בלבד)
 
 
 def quarter_state(q: str) -> pd.DataFrame:
@@ -91,6 +93,8 @@ def main():
     row = 0.8 * px["VEA"].pct_change() + 0.2 * px["EEM"].pct_change()
     rowlvl = (1 + row.fillna(0)).cumprod()
     fx = pd.read_csv("data/market/boi_usdils.csv", parse_dates=["date"]).set_index("date").value
+    sptr = pd.read_csv(INDICES / "data/prices/sp500tr.csv", parse_dates=["date"]).set_index("date").close
+    irx = px["^IRX"].dropna()
     mr = pd.read_csv("/home/user/revach123/maslulim/returns/monthly_totals.csv")
     mr["ym"] = pd.PeriodIndex(mr.ym, freq="M")
     rows = []
@@ -99,7 +103,9 @@ def main():
         b = st[st.q == q1].set_index(KEY)
         j = a.join(b[["FX", "report_date", "total_k"]], rsuffix="1", how="inner")
         d0, d1 = pd.Timestamp(j.report_date.iloc[0]), pd.Timestamp(j.report_date1.iloc[0])
-        r_us = px["^GSPC"].asof(d1) / px["^GSPC"].asof(d0) - 1
+        r_us = sptr.asof(d1) / sptr.asof(d0) - 1          # S&P 500 Total Return (רגל התשואה בהחלפים: SPTR)
+        tau = (d1 - d0).days / 365.0
+        i_usd = irx[(irx.index > d0) & (irx.index <= d1)].mean() / 100   # ממוצע תשואת אג"ח ממשלת ארה"ב 3 חודשים בתקופה
         r_row = rowlvl.asof(d1) / rowlvl.asof(d0) - 1
         e = fx.asof(d1) / fx.asof(d0) - 1
         months = pd.period_range(d0.to_period("M") + 1, d1.to_period("M"), freq="M")
@@ -111,6 +117,7 @@ def main():
         u = j.u_phys_k + j.u_syn_k
         r_phys = np.where(j.u_phys_k > 0, (j.u_phys_us_k * r_us + (j.u_phys_k - j.u_phys_us_k) * r_row) / j.u_phys_k.replace(0, np.nan), 0)
         r_syn = np.where(j.u_syn_k > 0, (j.u_syn_us_k * r_us + (j.u_syn_k - j.u_syn_us_k) * r_row) / j.u_syn_k.replace(0, np.nan), 0)
+        r_syn = r_syn - i_usd * tau   # החלף/חוזה: תשואה פחות ריבית דולרית על הנוציונל
         g_phys = j.u_phys_k / j.total_k * np.nan_to_num(r_phys)
         g_syn = j.u_syn_k / j.total_k * np.nan_to_num(r_syn)
         j["g_phys"], j["g_syn"] = g_phys, g_syn

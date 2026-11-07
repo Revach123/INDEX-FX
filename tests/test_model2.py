@@ -31,3 +31,10 @@ def test_article_example_if_synthetic_gain_were_shekel():
 
 def test_no_shock_no_flow():
     assert track_flows(ex()).flow_k.iloc[0] == pytest.approx(0.0)
+
+
+def test_swap_gain_is_return_minus_usd_interest():
+    # 30% סינתטי בלבד, 10% עלייה ברבעון, ריבית דולרית 4%: הרווח הדולרי = 30% × (10% − 1%) = 2.7%
+    d = ex().assign(U_phys_us=0.0, U_syn_us=0.30, E_il=0.0, B_il=0.70)
+    o = track_flows(d, r_us=0.10, p=P2(usdils=1.0, usd_rate=0.04, horizon_years=0.25))
+    assert o.FX1.iloc[0] == pytest.approx(0.19 + 0.30 * 0.09)

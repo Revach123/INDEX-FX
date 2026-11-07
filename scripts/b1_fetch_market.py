@@ -30,6 +30,7 @@ SYMBOLS = {
     "ACWI": "ROW", "URTH": "ROW", "EEM": "ROW", "VEA": "ROW",
     "^TA125.TA": "IL", "TA35.TA": "IL", "^TA90.TA": "IL",
     "ILS=X": "FX",
+    "^IRX": "RATE",   # תשואת אג"ח ממשלת ארה"ב 13 שבועות (%) - קירוב לרגל הריבית הדולרית בהחלף
 }
 BOI = "https://edge.boi.gov.il/FusionEdgeServer/sdmx/v2/data/dataflow/BOI.STATISTICS/{flow}?startperiod={start}&format=csv"
 

@@ -90,10 +90,12 @@ def main():
         for lab, sub in (("מסלולים כלליים", t[t.general]), ("כל המסלולים", t)):
             o = track_flows(sub, **sc, p=P2(usdils=1.0))
             gp = ((sub.U_phys_us + sub.U_phys_row) * 0.10 * sub.total_k).sum() / 1e6
-            gs = ((sub.U_syn_us + sub.U_syn_row) * 0.10 * sub.total_k).sum() / 1e6
+            # ברבעון: הרווח הדולרי בהחלף/חוזה = תשואה פחות ריבית דולרית על הנוציונל (^IRX האחרון × רבעון)
+            i_usd = pd.read_csv("data/market/prices.csv").query("symbol == '^IRX'").close.iloc[-1] / 100
+            gs = ((sub.U_syn_us + sub.U_syn_row) * (0.10 - i_usd * 0.25) * sub.total_k).sum() / 1e6
             den = o.part_target_growth_usd_m.sum() / 1e3
             flow = -(1 - b["רווח פיזי – חלק שנשאר"]) * gp - (1 - b["רווח סינתטי – חלק שנשאר"]) * gs + (1 - b["אפקט מכנה – חלק שנשאר"]) * den
-            rows.append({"קבוצה": lab, "הנחה": "איזון בפועל כפי שנמדד (רבעון, d3)", "נכסים": sub.total_k.sum() / 1e6, "זרם נטו": flow,
+            rows.append({"קבוצה": lab, "הנחה": "איזון בפועל כפי שנמדד (רבעון, d3; סינתטי: תשואה פחות ריבית)", "נכסים": sub.total_k.sum() / 1e6, "זרם נטו": flow,
                          "מכירת רווח דולרי": -(1 - b["רווח פיזי – חלק שנשאר"]) * gp - (1 - b["רווח סינתטי – חלק שנשאר"]) * gs,
                          "קנייה בגלל גידול היעד": (1 - b["אפקט מכנה – חלק שנשאר"]) * den})
     for k, lab in ((0.67, "נמדד 10 ימים"), (1.0, "מלא")):
