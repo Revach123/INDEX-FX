@@ -1,0 +1,39 @@
+name: datagov
+# סדרה חודשית רשמית לכל מסלול (data.gov.il) - scripts/b6_fetch_datagov.py
+on:
+  schedule:
+    - cron: "41 4 25 * *"
+  workflow_dispatch:
+  push:
+    branches: [claude/wizardly-ritchie-k4ew65]
+    paths:
+      - scripts/b6_fetch_datagov.py
+      - .github/workflows/datagov.yml
+permissions:
+  contents: write
+concurrency:
+  group: datagov
+  cancel-in-progress: false
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pandas requests
+      - run: python -u scripts/b6_fetch_datagov.py --from 202201
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/datagov
+          git diff --staged --quiet && exit 0
+          git commit -m "auto: datagov monthly [skip ci]"
+          for i in 1 2 3 4 5; do
+            git pull --rebase -X theirs -q origin "${GITHUB_REF_NAME}" || { git rebase --abort 2>/dev/null; sleep 3; continue; }
+            git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            sleep 3
+          done
+          exit 1
