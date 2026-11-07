@@ -82,6 +82,20 @@ def main():
                          "מכירת רווח דולרי": bn("part_usd_gain_usd_m"), "קנייה בגלל גידול היעד": bn("part_target_growth_usd_m"),
                          "מתוכו רווח פיזי": -((sub.U_phys_us + sub.U_phys_row) * 0.10 * sub.total_k).sum() / 1e6,
                          "מתוכו רווח סינתטי": -((sub.U_syn_us + sub.U_syn_row) * 0.10 * sub.total_k).sum() / 1e6 if syn_usd else 0.0})
+    # התנהגות נמדדת (d3, מדגם ללא חריגים, משוקלל לפי נכסים): איזה חלק מכל רכיב קוזז בפועל בתוך רבעון
+    rt = Path("data/results/rebalancing_test.csv")
+    if rt.exists():
+        b = pd.read_csv(rt)
+        b = b[b["מדגם"].str.contains("ללא חריגים") & b["שקלול"].eq("לפי נכסים")].iloc[0]
+        for lab, sub in (("מסלולים כלליים", t[t.general]), ("כל המסלולים", t)):
+            o = track_flows(sub, **sc, p=P2(usdils=1.0))
+            gp = ((sub.U_phys_us + sub.U_phys_row) * 0.10 * sub.total_k).sum() / 1e6
+            gs = ((sub.U_syn_us + sub.U_syn_row) * 0.10 * sub.total_k).sum() / 1e6
+            den = o.part_target_growth_usd_m.sum() / 1e3
+            flow = -(1 - b["רווח פיזי – חלק שנשאר"]) * gp - (1 - b["רווח סינתטי – חלק שנשאר"]) * gs + (1 - b["אפקט מכנה – חלק שנשאר"]) * den
+            rows.append({"קבוצה": lab, "הנחה": "איזון בפועל כפי שנמדד (רבעון, d3)", "נכסים": sub.total_k.sum() / 1e6, "זרם נטו": flow,
+                         "מכירת רווח דולרי": -(1 - b["רווח פיזי – חלק שנשאר"]) * gp - (1 - b["רווח סינתטי – חלק שנשאר"]) * gs,
+                         "קנייה בגלל גידול היעד": (1 - b["אפקט מכנה – חלק שנשאר"]) * den})
     for k, lab in ((0.67, "נמדד 10 ימים"), (1.0, "מלא")):
         rows.append({"קבוצה": f"קרנות מחקות לא מגודרות (κ={k}, {lab})", "הנחה": "b3", "נכסים": unh_bn, "זרם נטו": k * 0.10 * unh_bn})
     rows.append({"קבוצה": "קרנות מחקות מגודרות (נמדד: אין קנייה בחוזים)", "הנחה": "b3", "נכסים": hed_bn, "זרם נטו": 0.0})

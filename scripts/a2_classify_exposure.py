@@ -112,8 +112,16 @@ def fund_asset_class(fund_class: str, name: str) -> str:
     return "other"
 
 
+ALL_COLS = ["name", "sec_id", "issuer", "il_abroad", "country", "ccy", "fx_rate", "price", "units", "fair_value_k", "pct_total",
+            "underlying", "fund_class", "venue", "main_attr", "swap_asset_type", "swap_ticker", "swap_factor", "swap_net_fv_k",
+            "leg1_ccy", "leg2_ccy", "leg1_nominal", "leg2_nominal", "leg1_fx", "leg2_fx"]
+
+
 def classify(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
+    for c in ALL_COLS:   # רבעון שבו גיליון מסוים חסר בכל הקבצים -> העמודה לא נוצרה
+        if c not in df:
+            df[c] = np.nan
     df["fair_value_k"] = num(df["fair_value_k"]).fillna(num(df["swap_net_fv_k"]))
     df["pct_total"] = num(df["pct_total"])
     df["fx_rate"] = num(df["fx_rate"])

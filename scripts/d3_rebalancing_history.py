@@ -41,7 +41,11 @@ def quarter_state(q: str) -> pd.DataFrame:
     ph["us"] = ph.country.astype(str).str.contains("ארצות הברית|ארה").values | np.array([is_us(f"{a} {b}") for a, b in zip(ph.index_label, ph.fund_class)])
     phys = ph.groupby(KEY).fair_value_k.sum().rename("u_phys_k")
     phys_us = (ph.fair_value_k * ph.us).groupby([ph.legal_id, ph.track]).sum().rename("u_phys_us_k")
-    out = tt.set_index(KEY)[["total_k", "report_date", "system"]].join([spot, fwd, phys, phys_us])
+    # רווח צבור (שווי הוגן נטו) של החלפי מניות וחוזים עם רגל במט"ח - נכס דולרי עד ה-Reset
+    dm = df[df.form.isin(["SWAP_EQ_UNFUNDED", "SWAP_EQ_FUNDED", "FUTURE"]) &
+            ((df.leg1_ccy.fillna("ILS") != "ILS") | (df.leg2_ccy.fillna("ILS") != "ILS") | (df.ccy.fillna("ILS") != "ILS"))]
+    mtm = dm.groupby(KEY).fair_value_k.sum().rename("fx_mtm_k")
+    out = tt.set_index(KEY)[["total_k", "report_date", "system"]].join([spot, fwd, phys, phys_us, mtm])
     p = Path(f"data/history/deriv_{q}.csv.gz")
     if p.exists():
         dx = pd.read_csv(p, low_memory=False)
@@ -52,14 +56,35 @@ def quarter_state(q: str) -> pd.DataFrame:
         dx["us"] = [is_us(f"{a} {b} {c}") for a, b, c in zip(dx.ticker, dx.name, dx.root)]
         out = out.join(dx.groupby(KEY).exp_k.sum().rename("u_syn_k"))
         out = out.join((dx.exp_k * dx.us).groupby([dx.legal_id, dx.track]).sum().rename("u_syn_us_k"))
-    out = out.fillna({"fx_spot_k": 0, "fx_fwd_k": 0, "u_phys_k": 0, "u_phys_us_k": 0, "u_syn_k": 0, "u_syn_us_k": 0})
-    out["FX"] = (out.fx_spot_k + out.fx_fwd_k) / out.total_k
+    out = out.fillna({"fx_mtm_k": 0, "fx_spot_k": 0, "fx_fwd_k": 0, "u_phys_k": 0, "u_phys_us_k": 0, "u_syn_k": 0, "u_syn_us_k": 0})
+    out["FX"] = (out.fx_spot_k + out.fx_fwd_k + out.fx_mtm_k) / out.total_k
     out["q"] = q
     return out.reset_index()
 
 
+def wls_cluster(d: pd.DataFrame, cols: list[str], weighted: bool):
+    """ΔFX = Σ β_k·רכיב_k + אפקט קבוע לכל מעבר רבעון. שגיאות תקן מקובצות לפי מסלול (עמידות להטרוסקדסטיות ולתלות בזמן).
+    β=1: הרכיב נשאר בתיק (לא מאזנים); β=0: קוזז במלואו (איזון)."""
+    y = (d.FX1 - d.FX).values
+    w = (d.total_k / d.total_k.mean()).values if weighted else np.ones(len(d))
+    qs = sorted(d.q0.unique())
+    X = np.column_stack([d[c].values for c in cols] + [(d.q0 == q).values.astype(float) for q in qs])
+    Xw = X * w[:, None]
+    A = np.linalg.inv(X.T @ Xw)
+    b = A @ (Xw.T @ y)
+    e = y - X @ b
+    g = (d.legal_id.astype(str) + "_" + d.track.astype(str)).values
+    S = np.zeros((X.shape[1], X.shape[1]))
+    for _, idx in pd.Series(np.arange(len(d))).groupby(g):
+        sv = (X[idx.values] * (w[idx.values] * e[idx.values])[:, None]).sum(0)
+        S += np.outer(sv, sv)
+    cov = A @ S @ A
+    k = len(cols)
+    return b[:k], np.sqrt(np.diag(cov)[:k])
+
+
 def main():
-    qs = sorted(p.stem.replace("positions_", "") for p in Path("data/history").glob("positions_*.csv.gz"))
+    qs = sorted(p.name.replace("positions_", "").replace(".csv.gz", "") for p in Path("data/history").glob("positions_*.csv.gz"))
     st = pd.concat([quarter_state(q) for q in qs])
     st.to_csv("data/history/track_quarter_state.csv.gz", index=False, compression="gzip")
     px = pd.read_csv("data/market/prices.csv", parse_dates=["date"]).pivot(index="date", columns="symbol", values="close")
@@ -88,6 +113,8 @@ def main():
         r_syn = np.where(j.u_syn_k > 0, (j.u_syn_us_k * r_us + (j.u_syn_k - j.u_syn_us_k) * r_row) / j.u_syn_k.replace(0, np.nan), 0)
         g_phys = j.u_phys_k / j.total_k * np.nan_to_num(r_phys)
         g_syn = j.u_syn_k / j.total_k * np.nan_to_num(r_syn)
+        j["g_phys"], j["g_syn"] = g_phys, g_syn
+        j["g_den"] = j.FX * ((1 + e) / (1 + j.R1) - 1)
         j["FXp"] = (j.FX + g_phys + g_syn) * (1 + e) / (1 + j.R1)
         j["FXp_article"] = (j.FX + g_phys) * (1 + e) / (1 + j.R1)
         j["q0"], j["q1"], j["r_us"], j["r_row"], j["e"] = q0, q1, r_us, r_row, e
@@ -97,22 +124,12 @@ def main():
     p.to_csv("data/results/rebalancing_panel.csv", index=False)
     print(f"[d3] {len(p)} תצפיות מסלול-רבעון, {p.q0.nunique()} מעברים, {p.groupby(KEY).ngroups} מסלולים")
     res = []
-    for lab, col in (("כל הרווח הזר בדולר (מהדוחות)", "FXp"), ("רק הפיזי בדולר (הנחת המאמר)", "FXp_article")):
-        x = (p[col] - p.FX).values
-        y = (p.FX1 - p.FX).values
-        w = p.total_k.values
-        # אפקט קבוע לכל מעבר רבעון (שינויי יעד שנתיים, אירועים) - משתני דמה לכל מעבר
-        X = np.column_stack([np.ones_like(x), x] + [(p.q0 == q).values.astype(float) for q in sorted(p.q0.unique())[1:]])
-        W = np.sqrt(w)
-        b = np.linalg.lstsq(X * W[:, None], y * W, rcond=None)[0]
-        res_ = (y - X @ b)
-        s2 = np.sum(w * res_**2) / (w.sum() * (len(y) - X.shape[1]) / len(y))
-        cov = s2 * np.linalg.inv((X * w[:, None]).T @ X)
-        res.append({"מדד הסחיפה": lab, "β (0=איזון מלא, 1=אין איזון)": b[1], "t (מול 0)": b[1] / np.sqrt(cov[1, 1]),
-                    "t (מול 1)": (b[1] - 1) / np.sqrt(cov[1, 1]),
-                    "R²": 1 - np.sum(w * res_**2) / np.sum(w * (y - np.average(y, weights=w))**2),
-                    "סחיפה פסיבית ממוצעת |pp|": np.average(np.abs(x), weights=w) * 100,
-                    "שינוי בפועל ממוצע |pp|": np.average(np.abs(y), weights=w) * 100})
+    for lab, d in (("כל התצפיות", p), ("ללא חריגים (|שינוי|<10pp)", p[(p.FX1 - p.FX).abs() < 0.10])):
+        for wt in (True, False):
+            b, se = wls_cluster(d, ["g_phys", "g_syn", "g_den"], wt)
+            res.append({"מדגם": lab, "שקלול": "לפי נכסים" if wt else "ללא", "n": len(d),
+                        "רווח פיזי – חלק שנשאר": b[0], "se": se[0], "רווח סינתטי – חלק שנשאר": b[1], "se.1": se[1],
+                        "אפקט מכנה – חלק שנשאר": b[2], "se.2": se[2]})
     r = pd.DataFrame(res).round(3)
     r.to_csv("data/results/rebalancing_test.csv", index=False)
     print(r.to_string(index=False))
