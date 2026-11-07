@@ -38,12 +38,14 @@ COLS = {
 }
 
 
-def extract(reports_dir: Path) -> pd.DataFrame:
-    files = latest_per_company(list_files(reports_dir))
+def extract(reports_dir: Path, all_quarters: bool = False, sheets: set | None = None) -> pd.DataFrame:
+    files = list_files(reports_dir) if all_quarters else latest_per_company(list_files(reports_dir))
     print(f"[a1] {len(files)} קבצים אחרונים לפי חברה+מערכת", file=sys.stderr)
     out = []
     for f in sorted(files, key=lambda x: x.name):
         for block in build_source([f]):
+            if sheets and block["Category"] not in sheets:
+                continue
             if block["מידע"] != "מידע":
                 print(f"[a1] אזהרה: {f.name} / {block['Category']}: {block['Clean'][0].get('סיבה')}", file=sys.stderr)
                 continue
@@ -62,8 +64,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--reports-dir", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--all-quarters", action="store_true", help="כל הדוחות (לא רק האחרון לכל חברה)")
     a = ap.parse_args()
-    df = extract(a.reports_dir)
+    df = extract(a.reports_dir, a.all_quarters)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(a.out, index=False, compression="gzip")
     print(f"[a1] {len(df):,} החזקות, {df.groupby(['legal_id','track']).ngroups} מסלולים -> {a.out}", file=sys.stderr)

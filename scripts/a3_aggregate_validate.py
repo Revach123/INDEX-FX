@@ -25,6 +25,16 @@ def track_totals(df: pd.DataFrame) -> pd.DataFrame:
     out = g.agg(total_k=("tot", "median"), n_ref=("tot", "size"), tot_min=("tot", "min"), tot_max=("tot", "max"),
                 report_date=("report_date", "first"), system=("system", "first")).reset_index()
     out["total_spread"] = (out.tot_max - out.tot_min) / out.total_k.abs()
+    # בדיקה: סכום השווי ההוגן במסלול אמור להיות שווה לסך הנכסים (אצל כמעט כל הגופים - חציון 1.0000).
+    # גוף שאצלו "שיעור מסך נכסי ההשקעה" מחושב מול כל החברה (מור, 514956465: כל המסלולים יוצאים 115.5 מיליארד)
+    # מזוהה לפי חציון היחס, ואצלו סך הנכסים = סכום השווי ההוגן של המסלול.
+    fv = df.groupby(["legal_id", "track"]).fair_value_k.sum().rename("fv_sum").reset_index()
+    out = out.merge(fv, on=["legal_id", "track"], how="left")
+    out["fv_ratio"] = out.fv_sum / out.total_k
+    med = out.groupby("legal_id").fv_ratio.transform("median")
+    bad = (med - 1).abs() > 0.02
+    out["total_method"] = np.where(bad, "fv_sum", "pct")
+    out.loc[bad, "total_k"] = out.loc[bad, "fv_sum"]
     return out
 
 

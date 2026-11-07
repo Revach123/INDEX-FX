@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 data/positions.csv.gz
 .cache/
+.cache/
+data/history/positions_*.csv.gz
+data/history/deriv_*.csv.gz
