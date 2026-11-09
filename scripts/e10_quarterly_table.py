@@ -91,3 +91,73 @@ pd.set_option("display.width", 300, "display.max_columns", 40)
 print(t.round(1).T.to_string())
 ok = t.dropna(subset=["מסלולים: סה\"כ", "בנק ישראל: מוסדיים נטו (מיליארד ש\"ח)"])
 print(f"\nמתאם מסלולים (מהדוחות) מול בנק ישראל: {ok['מסלולים: סה\"כ'].corr(ok['בנק ישראל: מוסדיים נטו (מיליארד ש\"ח)']):.2f}, n={len(ok)}")
+
+# --- קובץ אקסל אחד מסודר: רבעון בשורה, עמודות מקובצות לפי נושא, + גיליון מקורות
+from openpyxl import Workbook  # noqa: E402
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side  # noqa: E402
+from openpyxl.utils import get_column_letter  # noqa: E402
+
+GROUPS = [
+    ("תנועת השוק (%)", [("S&P 500 (%)", "S&P 500"), ("S&P 500 בשקלים (%)", "S&P 500 בשקלים"), ("ת\"א-125 (%)", "ת\"א-125"),
+                        ("ת\"א-35 (%)", "ת\"א-35"), ("דולר/שקל (%)", "דולר/שקל")]),
+    ("החזקות מט\"ח – מסלולים (מיליארד ש\"ח)", [("חשיפת מט\"ח רשמית, סוף רבעון", "חשיפה, סוף רבעון"), ("שינוי בהחזקות מט\"ח", "שינוי ברבעון")]),
+    ("מסלולים: קנייה(+)/מכירה(−) של מט\"ח לפי סיבה (מיליארד ש\"ח)",
+     [(c, c.replace("מסלולים: ", "")) for c in t.columns if c.startswith("מסלולים:")]),
+    ("קרנות מחקות על חו\"ל: קנייה(+)/מכירה(−) בחוזי אקדמה (מיליארד ש\"ח)",
+     [(c, c.replace("קרנות מחקות: ", "")) for c in t.columns if c.startswith("קרנות מחקות:")]),
+    ("סה\"כ", [("סה\"כ מסלולים + קרנות מחקות", "מסלולים + קרנות מחקות")]),
+    ("בנק ישראל: עסקאות מט\"ח נטו לפי מגזר (מיליארד ש\"ח)",
+     [("בנק ישראל: מוסדיים נטו (מיליארד ש\"ח)", "מוסדיים")] +
+     [(c, c.replace("בנק ישראל: ", "")) for c in t.columns if c.startswith("בנק ישראל: ") and "מוסדיים" not in c]),
+]
+wb = Workbook()
+ws = wb.active
+ws.title = "טבלה רבעונית"
+ws.sheet_view.rightToLeft = True
+hdr = Font(bold=True, color="FFFFFF")
+fills = ["1F4E78", "375623", "7F6000", "833C0B", "404040", "203864"]
+thin = Side(style="thin", color="BFBFBF")
+ws.cell(1, 1, "רבעון").font = Font(bold=True)
+ws.merge_cells(start_row=1, start_column=1, end_row=2, end_column=1)
+col = 2
+for gi, (gname, cols) in enumerate(GROUPS):
+    ws.cell(1, col, gname)
+    ws.merge_cells(start_row=1, start_column=col, end_row=1, end_column=col + len(cols) - 1)
+    for k, (src, lab) in enumerate(cols):
+        for r in (1, 2):
+            c = ws.cell(r, col + k)
+            c.fill = PatternFill("solid", fgColor=fills[gi])
+            c.font = hdr
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            c.border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        ws.cell(2, col + k, lab)
+        for i, (q, row) in enumerate(t.iterrows()):
+            v = row[src]
+            cell = ws.cell(3 + i, col + k, None if pd.isna(v) else round(float(v), 2))
+            cell.number_format = "0" if "חודשים" in lab else "+0.0;-0.0;0.0"
+            cell.border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    col += len(cols)
+for i, q in enumerate(t.index):
+    ws.cell(3 + i, 1, q).font = Font(bold=True)
+ws.row_dimensions[1].height = 42
+ws.row_dimensions[2].height = 58
+ws.column_dimensions["A"].width = 10
+for c in range(2, col):
+    ws.column_dimensions[get_column_letter(c)].width = 13
+ws.freeze_panes = "B3"
+notes = wb.create_sheet("מקורות והערות")
+notes.sheet_view.rightToLeft = True
+for i, line in enumerate([
+    "כל הסכומים במיליארדי ש\"ח; + = קניית מט\"ח נטו, − = מכירה. הרבעון = הרבעון שבו התרחשה התנועה. תא ריק = אין נתון.",
+    "מדדים: סוף רבעון מול סוף רבעון (Yahoo Finance). דולר/שקל: שער יציג, בנק ישראל.",
+    "החזקות מט\"ח: חשיפת מט\"ח רשמית של כל מסלולי הגמל, הפנסיה והביטוח (data.gov, FOREIGN_CURRENCY_EXPOSURE).",
+    "מסלולים לפי סיבה: מדוחות רשימת הנכסים הרבעוניים (ברמת הנכס הבודד), לפי מכשיר; שערוך מנוטרל.",
+    "סילוקי החלפים/עתידיים: רווח/הפסד שהתקבל/שולם בדולר ועבר לסעיפי מזומן/ני\"ע/בטחונות – העברה בין סעיפים, לא עסקה בשוק המט\"ח. העסקה בשוק = הסה\"כ.",
+    "קרנות מחקות: חוזי אקדמה בפועל מהדוח החודשי המלא לרשות ני\"ע (קוד 38), כל הקרנות המחקות על מניות בחו\"ל; עמודת 'חודשים בנתון' מציינת רבעון חלקי.",
+    "בנק ישראל: סדרות WEB_TV_EX_*_Q (עסקאות מט\"ח נטו לפי מגזר, מיליוני דולר), מומר לש\"ח בשער ממוצע ברבעון. סך כל המגזרים ≈ 0 (שוק סגור).",
+    "המדידה מהדוחות (מסלולים) מול נתון בנק ישראל למוסדיים: מתאם 0.85; הפער ברמה (בנק ישראל שלילי יותר) עדיין לא מוסבר.",
+]):
+    notes.cell(1 + i, 1, line)
+notes.column_dimensions["A"].width = 160
+wb.save("data/results/quarterly_table.xlsx")
+print("[e10] data/results/quarterly_table.xlsx")
