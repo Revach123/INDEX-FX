@@ -44,6 +44,17 @@ for c, lab in list(comp.items()) + [("total", "סה\"כ נטו")]:
         b, se = wls_cluster(d.assign(FX1=d.y, FX=0.0), ["v", "gp"], wt)
         rows.append({"רכיב": lab, "שקלול": "נכסים" if wt else "ללא", "n": len(d),
                      "מול שערוך נגזרים": round(b[0], 3), "se": round(se[0], 3), "מול רווח פיזי": round(b[1], 3), "se.1": round(se[1], 3)})
+# אותו מדגם לכל הרכיבים (כל רכיב והסה"כ בתוך 10% מהנכסים) - כך שהרכיבים מסתכמים בדיוק לסה"כ
+allc = list(comp) + ["total"]
+ok = np.ones(len(w), bool)
+for c in allc:
+    ok &= (w[c] / w.total_k).abs().values < 0.10
+dc = w[ok].reset_index()
+for c, lab in list(comp.items()) + [("total", "סה\"כ נטו")]:
+    for wt in (True, False):
+        b, se = wls_cluster(dc.assign(FX1=dc[c] / dc.total_k, FX=0.0), ["v", "gp"], wt)
+        rows.append({"רכיב": lab + " [מדגם אחיד]", "שקלול": "נכסים" if wt else "ללא", "n": len(dc),
+                     "מול שערוך נגזרים": round(b[0], 3), "se": round(se[0], 3), "מול רווח פיזי": round(b[1], 3), "se.1": round(se[1], 3)})
 r = pd.DataFrame(rows)
 r.to_csv("data/results/fx_flow_breakdown_response.csv", index=False)
 print(r[r["שקלול"] == "נכסים"].to_string(index=False))
