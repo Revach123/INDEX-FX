@@ -112,3 +112,65 @@ R = pd.DataFrame(res)
 R.to_csv("data/results/mandatory_flows.csv")
 pd.set_option("display.width", 280, "display.max_columns", 20, "display.float_format", lambda v: f"{v:,.1f}")
 print(R.to_string())
+
+# ---------- פירוק רצועת המניות, בהנחה ששומרים על אותו תמהיל ----------
+# ההקטנה/הגדלה המחויבת מתחלקת בין רכיבי החשיפה למניות לפי משקלם אחרי הזעזוע:
+#   מניות בישראל | מניות חו"ל פיזיות | חוזים והחלפים | קרנות ישראליות על מניות חו"ל.
+# התמורה ממכירת ני"ע מושקעת בשאר הנכסים (לא מניות) לפי הרכבם הקיים: חלק f במט"ח, השאר בשקלים.
+#   עסקת מט"ח ממכירת מניות חו"ל פיזיות = הסכום × (1 − f).  הקטנת חוזים: אין עסקת מט"ח.
+#   פדיון קרן ישראלית על חו"ל: מקטין חשיפת מט"ח לפי יחס החשיפה של הקרנות (fx_ilf / eqfr_ilf).
+# אחר כך נבדקת שוב רצועת המט"ח על החשיפה שהתקבלה.
+st = pd.read_csv("data/history/track_quarter_state.csv.gz")
+st = st[st.q == "2026Q2"][KEY + ["fx_spot_k"]]
+t2 = t.merge(st, on=KEY, how="left")
+xs = (t2.fx_spot_k / t2.total_k).fillna(P)                              # נכסים במט"ח (ספוט) כשבר מהנכסים
+nonq = (1 - t.E_il - P - t.eqfr_ilf).clip(lower=1e-6)
+f_fx = ((xs - P) / nonq).clip(0, 1)                                      # חלק המט"ח בנכסים שאינם מניות
+ilf_ratio = (t.fx_ilf / t.eqfr_ilf.replace(0, np.nan)).fillna(0).clip(0, 1)
+
+
+def eq_step(r, s, e):
+    a1 = 1 + P * ((1 + r) * (1 + e) - 1) + S * r * (1 + e) + (X0 - P) * e + t.E_il * s + t.eqfr_ilf * r
+    comp = {"il": t.E_il * (1 + s), "phys": P * (1 + r) * (1 + e), "syn": S * (1 + r) * (1 + e), "ilf": t.eqfr_ilf * (1 + r)}
+    q1 = sum(comp.values()) / a1
+    lo, hi = t.min_pct_equity / 100, t.max_pct_equity / 100
+    hq = (lo.notna() & hi.notna()).values
+    need1 = np.where(hq, band_need(q1, lo, hi), 0.0) * a1               # שבר מ-A0, + הגדלה / − הקטנה
+    comp0 = {"il": t.E_il, "phys": P, "syn": S, "ilf": t.eqfr_ilf}
+    q0 = sum(comp0.values())
+    need0 = np.where(hq, band_need(q0, lo, hi), 0.0)
+    out = {}
+    tot1, tot0 = sum(comp.values()).replace(0, np.nan), q0.replace(0, np.nan)
+    d = {k: (need1 * comp[k] / tot1).fillna(0) - (need0 * comp0[k] / tot0).fillna(0) for k in comp}   # שינוי מחויב בכל רכיב, בגלל הזעזוע
+    fx_eq = d["phys"] * (1 - f_fx) + d["ilf"] * ilf_ratio              # שינוי חשיפת המט"ח מצעד המניות (עסקת מט"ח)
+    # רצועת המט"ח אחרי צעד המניות
+    x1 = (X0 * (1 + e) + (P + S) * r * (1 + e)) / a1
+    lo, hi = t.min_pct_fx / 100, t.max_pct_fx / 100
+    x1b = x1 + fx_eq / a1
+    need_fx = band_need(x1b, lo, hi) * a1 - band_need(X0, lo, hi)
+    need_fx = np.where(has, need_fx, 0.0)
+    bn = lambda v: float(np.nansum(v * A0))  # noqa: E731
+    out["מניות בישראל – מכירה/קנייה"] = bn(d["il"])
+    out["מניות חו\"ל פיזיות – מכירה/קנייה"] = bn(d["phys"])
+    out["חוזים והחלפים על חו\"ל – הקטנה/הגדלה (לא מט\"ח)"] = bn(d["syn"])
+    out["קרנות ישראליות על חו\"ל – פדיון/קנייה"] = bn(d["ilf"])
+    out["סה\"כ שינוי חשיפה למניות"] = sum(bn(v) for v in d.values())
+    out["עסקת מט\"ח מצעד המניות"] = bn(fx_eq)
+    out["  מזה: תמורת מניות חו\"ל שהומרה לשקלים"] = bn(d["phys"] * (1 - f_fx))
+    out["  (תמורה שנשארה בנכסים במט\"ח)"] = bn(d["phys"] * f_fx)
+    out["עסקת מט\"ח מרצועת המט\"ח (אחרי צעד המניות)"] = bn(need_fx)
+    out["סה\"כ מט\"ח מחויב במסלולים"] = out["עסקת מט\"ח מצעד המניות"] + out["עסקת מט\"ח מרצועת המט\"ח (אחרי צעד המניות)"]
+    out["מסלולים שחייבים לפעול (מניות או מט\"ח)"] = int(((np.abs(sum(d.values())) > 1e-9) | (np.abs(need_fx) > 1e-9)).sum())
+    return out
+
+
+res2 = {}
+for lab, r, s, e in SC:
+    o = eq_step(r, s, e)
+    o["קרנות מגודרות"] = -r * H
+    o["סה\"כ מחויב (מסלולים + קרנות מגודרות)"] = o["סה\"כ מט\"ח מחויב במסלולים"] + o["קרנות מגודרות"]
+    res2[lab] = o
+R2 = pd.DataFrame(res2)
+R2.to_csv("data/results/mandatory_flows_mix.csv")
+print(f"\n=== שמירה על אותו תמהיל. חלק המט\"ח בנכסים שאינם מניות (משוקלל): {np.average(f_fx, weights=A0):.2f} ===")
+print(R2.to_string())
