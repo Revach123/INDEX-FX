@@ -60,3 +60,7 @@ order = ["deck/_p0.png", "deck/stageA_summary.png", "deck/stageA_tracks_donut.pn
 im = [Image.open(p).convert("RGB") for p in order]
 im[0].save("deck/stageA.pdf", save_all=True, append_images=im[1:], resolution=150.0)
 print("pages", len(im))
+
+import os
+for _p in ("deck/_p0.png", "deck/_p7.png"):
+    os.remove(_p)
