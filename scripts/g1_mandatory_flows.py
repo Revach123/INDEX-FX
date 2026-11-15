@@ -43,6 +43,9 @@ p = prep(load("2026Q2"))
 liq = p[p.bucket.isin(["cash_fx", "coll_fx"])].groupby(KEY + ["bucket"]).fair_value_k.sum().unstack().fillna(0.0)
 t = t.merge(liq.reset_index(), on=KEY, how="left").fillna({"cash_fx": 0.0, "coll_fx": 0.0})
 
+_irx = pd.read_csv("data/market/prices.csv")
+_irx = _irx[(_irx.symbol == "^IRX") & (_irx.date >= "2026-04-01") & (_irx.date <= "2026-06-30")].close.mean()
+CQ = _irx / 100 / 4        # ריבית דולרית לרבעון (אג"ח ממשלת ארה"ב ל-3 חודשים, ממוצע רבעון 2/2026): הרווח בהחלף/חוזה = תשואת המדד פחות הריבית
 A0 = t.total_k / 1e6                                   # מיליארדי ש"ח
 P, S, X0 = t.U_phys_us + t.U_phys_row, t.U_syn_us + t.U_syn_row, t.FX0
 has = t.max_pct_fx.notna() & t.min_pct_fx.notna()
@@ -56,8 +59,8 @@ def band_need(x, lo, hi):
 
 
 def scenario(r, s, e):
-    a1 = 1 + P * ((1 + r) * (1 + e) - 1) + S * r * (1 + e) + (X0 - P) * e + t.E_il * s + t.eqfr_ilf * r
-    x1 = (X0 * (1 + e) + (P + S) * r * (1 + e)) / a1
+    a1 = 1 + P * ((1 + r) * (1 + e) - 1) + S * (r - CQ) * (1 + e) + (X0 - P) * e + t.E_il * s + t.eqfr_ilf * r
+    x1 = (X0 * (1 + e) + (P * r + S * (r - CQ)) * (1 + e)) / a1
     q0 = t.E_il + P + S + t.eqfr_ilf
     q1 = (t.E_il * (1 + s) + (P + S) * (1 + r) * (1 + e) + t.eqfr_ilf * (1 + r)) / a1
     A1 = A0 * a1
@@ -77,7 +80,7 @@ def scenario(r, s, e):
     out["מניות – מחויב לפי הרצועה (שינוי חשיפה)"] = np.nansum(np.where(hq, needq, 0.0))
     out["  מסלולים שחייבים לפעול (מניות)"] = int((hq & (np.abs(needq) > 1e-9)).sum())
     out["רווח/הפסד דולרי: מניות פיזיות"] = (P * r * (1 + e) * A0).sum()
-    out["רווח/הפסד דולרי: חוזים והחלפים"] = (S * r * (1 + e) * A0).sum()
+    out["רווח/הפסד דולרי: חוזים והחלפים (אחרי ריבית)"] = (S * (r - CQ) * (1 + e) * A0).sum()
     # margin: הפסד על חוזים דולריים מול דולרים נזילים (רק בירידה)
     if r < 0:
         loss_f = t.fut_k / 1e6 * (-r)
@@ -98,13 +101,13 @@ H = (hed.aum_m * hed.eq_pct.fillna(100) / 100).sum() / 1e3
 Um = (unh[unh.mimic == True].aum_m).sum() / 1e3  # noqa: E712
 print(f"     קרנות מניות חו\"ל: מגודרות {hed.aum_m.sum()/1e3:.1f} מיליארד (חשיפה למניות {H:.1f}); לא מגודרות מחקות {Um:.1f}; לא מגודרות אקטיביות {unh[unh.mimic != True].aum_m.sum()/1e3:.1f}")  # noqa: E712
 
-SC = [("S&P +10%", .10, 0, 0), ("S&P +10%, דולר −2%", .10, 0, -.02), ("S&P +10%, ת\"א +5%, דולר −2%", .10, .05, -.02),
+SC = [("ללא שינוי במדד", 0, 0, 0), ("S&P +10%", .10, 0, 0), ("S&P +10%, דולר −2%", .10, 0, -.02), ("S&P +10%, ת\"א +5%, דולר −2%", .10, .05, -.02),
       ("S&P −10%", -.10, 0, 0), ("S&P −10%, דולר +2%", -.10, 0, .02), ("S&P −20%, דולר +5%", -.20, -.10, .05), ("S&P +1%", .01, 0, 0)]
 res = {}
 for lab, r, s, e in SC:
     o = scenario(r, s, e)
-    o["קרנות מגודרות – מכירה/קנייה מחויבת (קרן או בנק)"] = -r * H * (1 + 0)
-    o["קרנות לא מגודרות – נטו"] = 0.0
+    o["קרנות מגודרות – מכירה/קנייה מחויבת (קרן או בנק)"] = -(r - CQ) * H
+    o["קרנות לא מגודרות – נטו"] = CQ * Um
     o["  ברוטו: הגדלת פורוורד מול מכירת דולר מהסילוק"] = r * Um
     o["סה\"כ מחויב (רצועות המסלולים + קרנות מגודרות)"] = o["מט\"ח – מחויב לפי הרצועה"] + o["קרנות מגודרות – מכירה/קנייה מחויבת (קרן או בנק)"]
     res[lab] = o
@@ -130,7 +133,7 @@ ilf_ratio = (t.fx_ilf / t.eqfr_ilf.replace(0, np.nan)).fillna(0).clip(0, 1)
 
 
 def eq_step(r, s, e):
-    a1 = 1 + P * ((1 + r) * (1 + e) - 1) + S * r * (1 + e) + (X0 - P) * e + t.E_il * s + t.eqfr_ilf * r
+    a1 = 1 + P * ((1 + r) * (1 + e) - 1) + S * (r - CQ) * (1 + e) + (X0 - P) * e + t.E_il * s + t.eqfr_ilf * r
     comp = {"il": t.E_il * (1 + s), "phys": P * (1 + r) * (1 + e), "syn": S * (1 + r) * (1 + e), "ilf": t.eqfr_ilf * (1 + r)}
     q1 = sum(comp.values()) / a1
     lo, hi = t.min_pct_equity / 100, t.max_pct_equity / 100
@@ -144,7 +147,7 @@ def eq_step(r, s, e):
     d = {k: (need1 * comp[k] / tot1).fillna(0) - (need0 * comp0[k] / tot0).fillna(0) for k in comp}   # שינוי מחויב בכל רכיב, בגלל הזעזוע
     fx_eq = d["phys"] * (1 - f_fx) + d["ilf"] * ilf_ratio              # שינוי חשיפת המט"ח מצעד המניות (עסקת מט"ח)
     # רצועת המט"ח אחרי צעד המניות
-    x1 = (X0 * (1 + e) + (P + S) * r * (1 + e)) / a1
+    x1 = (X0 * (1 + e) + (P * r + S * (r - CQ)) * (1 + e)) / a1
     lo, hi = t.min_pct_fx / 100, t.max_pct_fx / 100
     x1b = x1 + fx_eq / a1
     need_fx = band_need(x1b, lo, hi) * a1 - band_need(X0, lo, hi)
@@ -167,10 +170,14 @@ def eq_step(r, s, e):
 res2 = {}
 for lab, r, s, e in SC:
     o = eq_step(r, s, e)
-    o["קרנות מגודרות"] = -r * H
-    o["סה\"כ מחויב (מסלולים + קרנות מגודרות)"] = o["סה\"כ מט\"ח מחויב במסלולים"] + o["קרנות מגודרות"]
+    o["קרנות מגודרות (רווח המדד פחות הריבית)"] = -(r - CQ) * H
+    o["קרנות לא מגודרות: פורוורד שנדרש"] = r * Um
+    o["קרנות לא מגודרות: דולרים שהתקבלו מההחלף ונמכרים"] = -(r - CQ) * Um
+    o["קרנות לא מגודרות – נטו (= הריבית הדולרית)"] = CQ * Um
+    o["סה\"כ מחויב"] = o["סה\"כ מט\"ח מחויב במסלולים"] + o["קרנות מגודרות (רווח המדד פחות הריבית)"] + o["קרנות לא מגודרות – נטו (= הריבית הדולרית)"]
     res2[lab] = o
 R2 = pd.DataFrame(res2)
 R2.to_csv("data/results/mandatory_flows_mix.csv")
 print(f"\n=== שמירה על אותו תמהיל. חלק המט\"ח בנכסים שאינם מניות (משוקלל): {np.average(f_fx, weights=A0):.2f} ===")
+print(f"ריבית דולרית לרבעון: {CQ:.4f}")
 print(R2.to_string())
