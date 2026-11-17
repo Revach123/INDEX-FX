@@ -2,11 +2,10 @@
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from bidi.algorithm import get_display
 from PIL import Image
 
 plt.rcParams["font.family"] = "DejaVu Sans"
-H = lambda s: get_display(str(s))  # noqa: E731
+H = lambda s: str(s)  # matplotlib (raqm) מסדר עברית מימין לשמאל בעצמו; get_display הפך הכול פעמיים
 INK, MUTED = "#1F2933", "#6B7785"
 
 

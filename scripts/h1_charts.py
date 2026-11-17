@@ -6,7 +6,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from bidi.algorithm import get_display
 from matplotlib import font_manager
 
 plt.rcParams["font.family"] = "DejaVu Sans"
@@ -14,7 +13,7 @@ plt.rcParams["axes.unicode_minus"] = False
 C = {"שקלי": "#9AA9B8", "מט\"חי לא מגודר": "#E4572E", "מט\"חי מגודר": "#17A398", "מט\"חי גידור חלקי": "#F2B134",
      "משולב 1": "#C9BFE3", "משולב 2": "#9A86CC", "משולב 3": "#6A4FA8"}
 INK, MUTED = "#1F2933", "#6B7785"
-H = lambda s: get_display(str(s))  # noqa: E731
+H = lambda s: str(s)  # matplotlib (raqm) מסדר עברית מימין לשמאל בעצמו; get_display הפך הכול פעמיים
 FIG = (13.33, 7.5)
 
 
