@@ -120,13 +120,29 @@ fig = slide(5, f"בידי המוסדיים כמעט {(TA+FA)/1000:.1f} טריל�
 ax = fig.add_axes([0.04, 0.10, 0.92, 0.66]); ax.axis("off"); ax.set_aspect("equal"); ax.set_xlim(-10, 10); ax.set_ylim(-4.5, 4.5)
 r1, r2 = np.sqrt(TA) / np.sqrt(TA) * 4.0, np.sqrt(FA / TA) * 4.0
 ax.add_patch(Circle((4.6, 0), r1, color="#8F7BC9", alpha=.9)); ax.add_patch(Circle((-4.6, -4.0 + r2 + 0.3), r2, color="#17A398", alpha=.9))
-ax.text(4.6, 0.55, f"{TA:,.0f}", ha="center", va="center", fontsize=46, color="white", fontweight="bold")
-ax.text(4.6, -0.55, "מיליארד ש\"ח", ha="center", fontsize=18, color="white")
-ax.text(4.6, -1.5, f"{len(t):,} מסלולי פנסיה, גמל וביטוח", ha="center", fontsize=16, color="white")
+# נתח הקרנות בתוך עיגול המסלולים (פוזיציות לפי נייר, דוחות רבעוניים 2026)
+from matplotlib.patches import Wedge
+_pos = pd.read_csv("data/positions_classified.csv.gz", usecols=["legal_id", "track", "report_date", "il_abroad", "form", "fair_value_k"], low_memory=False)
+_tt = pd.read_csv("data/track_totals.csv"); _TT = _tt.total_k.sum()
+_pf = _pos[_pos.form.isin(["ETF", "MUTUAL_FUND"])].merge(_tt[["legal_id", "track", "report_date"]], on=["legal_id", "track", "report_date"])
+sh_il = _pf[_pf.il_abroad == "ישראל"].fair_value_k.sum() / _TT; sh_ab = _pf[_pf.il_abroad == "חו\"ל"].fair_value_k.sum() / _TT
+CX = 4.6; a0 = 90.0; a1 = a0 + sh_il * 360; a2 = a1 + sh_ab * 360
+ax.add_patch(Wedge((CX, 0), r1, a0, a1, color="#F2B134", ec="white", lw=2)); ax.add_patch(Wedge((CX, 0), r1, a1, a2, color="#5B4A9E", ec="white", lw=2))
+ax.text(CX, -0.75, f"{TA:,.0f}", ha="center", va="center", fontsize=44, color="white", fontweight="bold")
+ax.text(CX, -1.55, "מיליארד ש\"ח", ha="center", fontsize=17, color="white")
+ax.text(CX, -2.3, f"{len(t):,} מסלולי פנסיה, גמל וביטוח", ha="center", fontsize=15, color="white")
 ax.text(-4.6, -4.0 + r2 + 0.65, f"{FA:,.0f}", ha="center", va="center", fontsize=36, color="white", fontweight="bold")
 ax.text(-4.6, -4.0 + r2 - 0.15, "מיליארד ש\"ח", ha="center", fontsize=15, color="white")
 ax.text(-4.6, -4.0 + r2 - 0.85, f"{len(f):,} קרנות", ha="center", fontsize=14, color="white")
-fig.text(0.96, 0.095, "חלק מהמסלולים מחזיקים בעצמם קרנות, ולכן יש חפיפה בין שני הסכומים", ha="right", fontsize=13, color=MUTED)
+import math
+def _pt(ang, rr): return CX + rr * math.cos(math.radians(ang)), rr * math.sin(math.radians(ang))
+ax.annotate("", xy=_pt((a0 + a1) / 2, r1 * 0.8), xytext=(-0.9, 3.6), arrowprops=dict(arrowstyle="-", lw=2, color="#F2B134"))
+ax.annotate("", xy=_pt((a1 + a2) / 2, r1 * 0.8), xytext=(-0.9, 2.4), arrowprops=dict(arrowstyle="-", lw=2, color="#5B4A9E"))
+ax.text(-1.2, 3.6, f"{sh_il:.1%} בקרנות נאמנות וסל ישראליות", ha="right", va="center", fontsize=16, fontweight="bold", color="#C98A00")
+ax.text(-1.2, 3.1, f"({sh_il*_TT/1e6:,.0f} מיליארד ש\"ח)", ha="right", va="center", fontsize=13, color=MUTED)
+ax.text(-1.2, 2.4, f"{sh_ab:.1%} בקרנות וקרנות סל של חו\"ל", ha="right", va="center", fontsize=16, fontweight="bold", color="#5B4A9E")
+ax.text(-1.2, 1.9, f"({sh_ab*_TT/1e6:,.0f} מיליארד ש\"ח)", ha="right", va="center", fontsize=13, color=MUTED)
+fig.text(0.96, 0.095, "שיעור מנכסי המסלולים לפי דוחות ההחזקות (2026), לא כולל קרנות השקעה פרטיות. ההחזקות האלה יוצרות חפיפה עם סכום הקרנות", ha="right", fontsize=13, color=MUTED)
 save(fig, 5)
 
 # ---------- 4. מה זה חשיפה לדולר ----------
