@@ -91,7 +91,7 @@ for rect, (sv, fxs, mxs), name in (([0.53, 0.20, 0.43, 0.50], _tk, "מסלולי
         ticks.append((-(st + x - 1) / 2, g)); x += 1
     ax.set_xticks([a for a, _ in ticks]); ax.set_xticklabels([b for _, b in ticks], fontsize=14, fontweight="bold"); ax.tick_params(axis="x", pad=30, length=0)
     ax.set_title(name, fontsize=20, fontweight="bold", color=INK, pad=12); ax.spines[["top", "right"]].set_visible(False); ax.yaxis.grid(True, color="#EEF1F4"); ax.set_axisbelow(True); ax.set_ylim(0, top * 1.12)
-fig.text(0.5, 0.075, "בקרנות משולבות אין נתון גידור", ha="center", fontsize=12, color=MUTED)
+fig.text(0.5, 0.075, "סיווג: חו\"ל מלא = 95% ומעלה (פנסיה מקיפה: 65% ומעלה) · שקלי = עד 5% · בקרנות משולבות אין נתון גידור", ha="center", fontsize=12, color=MUTED)
 save(fig, 3)
 
 # ---------- 4. השאלה: S&P מול הדולר ----------

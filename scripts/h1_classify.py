@@ -2,14 +2,14 @@
 
 מסלולים (data.gov, דוח חודשי 8.2026, כל מסלולי גמל/פנסיה/ביטוח):
   fe = חשיפה לחו"ל / נכסים (כולל נגזרים; יכול לעבור 100% כשיש מינוף)       fx = חשיפת מט"ח / נכסים
-  שקלי:      fe < 10% וגם fx < 10%                             (לא משפיע)
-  מט"חי:     fe >= 80%                                         (ריכוז בחו"ל: S&P, עוקב מדדי מניות וכד')
+  שקלי:      fe < 5% וגם fx < 5%                             (לא משפיע)
+  מט"חי:     fe >= 95% (פנסיה מקיפה: >= 65%)                                         (ריכוז בחו"ל: S&P, עוקב מדדי מניות וכד')
       לפי יחס גידור fx/fe:  לא מגודר >= 70% | מגודר <= 30% | חלקי בין לבין
   משולב:     כל השאר (ארץ + חו"ל), מחולק לפי רמת החשיפה לחו"ל לצורך מידע.
 קרנות (funds.csv: דוח חודשי מלא + סיווג הרשות/הבורסה), רק קרנות עם שווי:
-  מט"חית:    סיווג ראשי מניות בחו"ל / אג"ח בחו"ל / סחורות, או כספית מט"חית (חשיפת מט"ח >= 80%).
+  מט"חית:    סיווג ראשי מניות בחו"ל / אג"ח בחו"ל / סחורות, או כספית מט"חית (חשיפת מט"ח >= 95%).
       גידור לפי חשיפת מט"ח בפועל: לא מגודרת >= 80% | מגודרת <= 20% | חלקית. תת-סוג: קרן מחקה / סל / פתוחה (אקטיבית).
-  שקלית:     סיווג ראשי אג"ח בארץ, אג"ח בארץ משולבת, מניות בארץ, כספית שקלית (חשיפת מט"ח < 20%)
+  שקלית:     סיווג ראשי אג"ח בארץ, אג"ח בארץ משולבת, מניות בארץ, כספית שקלית (חשיפת מט"ח <= 5%)
   משולבת:    כל השאר (גמישות, אגד קרנות, אסטרטגיות, גידור, מינוף, ועוד)
 """
 import numpy as np
@@ -25,7 +25,9 @@ t = t[t.TOTAL_ASSETS > 0].dropna(subset=["FOREIGN_EXPOSURE", "FOREIGN_CURRENCY_E
 t["A"] = t.TOTAL_ASSETS / 1e3                                  # מיליארדי ש"ח
 t["fe"], t["fx"], t["eq"] = t.FOREIGN_EXPOSURE / t.TOTAL_ASSETS, t.FOREIGN_CURRENCY_EXPOSURE / t.TOTAL_ASSETS, t.STOCK_MARKET_EXPOSURE / t.TOTAL_ASSETS
 t["hedge_ratio"] = (t.fx / t.fe.where(t.fe > 0.05)).clip(0, 1.5)
-cls = np.where((t.fe < 0.10) & (t.fx < 0.10), "שקלי", np.where(t.fe >= 0.80, "מט\"חי", "משולב"))
+comp = (t.domain == "פנסיה") & (t.FUND_CLASSIFICATION == "קרנות חדשות")          # פנסיה מקיפה: סף נמוך כי חלק מהנכסים חייב להיות בארץ
+thr = np.where(comp, 0.65, 0.95)
+cls = np.where((t.fe < 0.05) & (t.fx < 0.05), "שקלי", np.where(t.fe >= thr, "מט\"חי", "משולב"))
 sub = np.where(cls == "מט\"חי", np.where(t.hedge_ratio >= 0.70, "לא מגודר", np.where(t.hedge_ratio <= 0.30, "מגודר", "גידור חלקי")),
                np.where(cls == "משולב", np.where(t.fe < 0.40, "חו\"ל עד 40%", np.where(t.fe < 0.60, "חו\"ל 40%–60%", "חו\"ל 60%–80%")), "שקלי"))
 t["class"], t["subclass"] = cls, sub
@@ -47,9 +49,9 @@ f = pd.read_csv("data/funds/funds.csv", dtype={"fund": str})
 f = f[f.aum_m.notna() & (f.aum_m > 0)].copy()
 f["A"] = f.aum_m / 1e3
 f["fx"] = f.fx_pct.clip(lower=0, upper=105)
-money_fx = f.primary.eq("קרן כספית") & (f.fx >= 80)
+money_fx = f.primary.eq("קרן כספית") & (f.fx >= 95)
 foreign = f.primary.isin(["מניות בחו\"ל", "אג\"ח בחו\"ל", "סחורות"]) | money_fx
-local = f.primary.isin(["אג\"ח בארץ", "אג\"ח בארץ משולבת", "מניות בארץ", "קרן כספית"]) & ~money_fx & (f.fx.fillna(0) < 20)
+local = f.primary.isin(["אג\"ח בארץ", "אג\"ח בארץ משולבת", "מניות בארץ", "קרן כספית"]) & ~money_fx & (f.fx.fillna(0) <= 5)
 f["class"] = np.where(foreign, "מט\"חית", np.where(local, "שקלית", "משולבת"))
 hed_flag = f.hedged.astype(str).isin(["True", "true", "1"])
 fxv = f.fx.where(f.fx.notna(), np.where(hed_flag, 0.0, 100.0))
